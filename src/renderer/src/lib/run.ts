@@ -11,13 +11,21 @@ export function toastError(err: unknown): void {
 }
 
 // git 액션 공통 래퍼: 성공 토스트(옵션) + 에러 토스트 + 저장소 데이터 refresh
-export async function run(action: () => Promise<void>, successKey?: string): Promise<void> {
+// busyKey를 주면 작업 동안 uiStore.pending[busyKey]가 켜져 진행 표시에 쓰인다
+export async function run(
+  action: () => Promise<void>,
+  successKey?: string,
+  busyKey?: string
+): Promise<void> {
+  if (busyKey) useUiStore.getState().setPending(busyKey, true)
   try {
     await action()
     if (successKey) useUiStore.getState().pushToast(i18n.t(successKey))
   } catch (err) {
     toastError(err)
   } finally {
+    // refresh까지 끝나야 화면이 최신이므로 그 뒤에 진행 표시를 끈다
     await useRepoStore.getState().refresh().catch(() => {})
+    if (busyKey) useUiStore.getState().setPending(busyKey, false)
   }
 }

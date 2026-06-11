@@ -35,15 +35,19 @@ export function LeftPanel() {
   function checkout(branch: BranchDto): void {
     // 원격 브랜치는 프리픽스를 떼고 git의 DWIM 추적 브랜치 생성을 활용
     const name = branch.isRemote ? branch.name.split('/').slice(1).join('/') : branch.name
-    void run(() => window.api.checkoutBranch(name))
+    void run(() => window.api.checkoutBranch(name), undefined, 'checkout')
   }
 
   function mergeBranch(branch: BranchDto): void {
-    void run(async () => {
-      const result = await window.api.merge(branch.name)
-      if (result.conflicts) pushToast(t('toast.mergeConflict'))
-      else pushToast(t('toast.merged'))
-    })
+    void run(
+      async () => {
+        const result = await window.api.merge(branch.name)
+        if (result.conflicts) pushToast(t('toast.mergeConflict'))
+        else pushToast(t('toast.merged'))
+      },
+      undefined,
+      'merge'
+    )
   }
 
   async function deleteBranch(name: string, force: boolean): Promise<void> {
@@ -114,7 +118,7 @@ export function LeftPanel() {
         <div key={stash.index} className="group flex items-center gap-1 rounded px-1 hover:bg-zinc-800">
           <span className="min-w-0 flex-1 truncate text-sm">{stash.message}</span>
           <button
-            onClick={() => void run(() => window.api.stashApply(stash.index))}
+            onClick={() => void run(() => window.api.stashApply(stash.index), undefined, 'stash')}
             className="hidden text-xs text-emerald-400 group-hover:block"
           >
             {t('stash.apply')}

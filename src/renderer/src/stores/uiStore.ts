@@ -19,6 +19,8 @@ interface UiState {
   showSettings: boolean
   toasts: Toast[]
   confirm: ConfirmState | null
+  // 진행 중인 git 작업 키 (예: 'pull') — 버튼 스피너/비활성화에 사용
+  pending: Record<string, boolean>
   select(sel: Selection): void
   openConflict(path: string | null): void
   setShowSettings(v: boolean): void
@@ -26,6 +28,7 @@ interface UiState {
   dismissToast(id: number): void
   ask(message: string, onConfirm: () => void): void
   closeConfirm(): void
+  setPending(key: string, value: boolean): void
 }
 
 let toastId = 0
@@ -36,6 +39,7 @@ export const useUiStore = create<UiState>((set) => ({
   showSettings: false,
   toasts: [],
   confirm: null,
+  pending: {},
 
   select: (selected) => set({ selected }),
   openConflict: (conflictFile) => set({ conflictFile }),
@@ -49,5 +53,7 @@ export const useUiStore = create<UiState>((set) => ({
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
   ask: (message, onConfirm) => set({ confirm: { message, onConfirm } }),
-  closeConfirm: () => set({ confirm: null })
+  closeConfirm: () => set({ confirm: null }),
+
+  setPending: (key, value) => set((s) => ({ pending: { ...s.pending, [key]: value } }))
 }))
