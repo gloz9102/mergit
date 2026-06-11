@@ -1,4 +1,5 @@
-import { writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { GitService } from '../gitService'
@@ -121,8 +122,8 @@ describe('GitService', () => {
 
   it('push/pull: bare 원격 저장소와 동기화한다', async () => {
     const dir = makeRepo()
-    const remoteDir = makeRepo()
-    gitIn(remoteDir)('config', 'receive.denyCurrentBranch', 'ignore')
+    const remoteDir = mkdtempSync(join(tmpdir(), 'gkc-remote-'))
+    gitIn(remoteDir)('init', '--bare', '-b', 'main')
     gitIn(dir)('remote', 'add', 'origin', remoteDir)
     const svc = new GitService(dir)
     await svc.push()
@@ -150,6 +151,29 @@ describe('GitService', () => {
     writeFileSync(join(dir, 'junk.txt'), 'junk\n')
     const svc = new GitService(dir)
     await svc.discard(['a.txt', 'junk.txt'])
+    expect((await svc.status()).files).toHaveLength(0)
+  })
+
+  it('merge: 존재하지 않는 브랜치는 throw 한다', async () => {
+    const dir = makeRepo()
+    const svc = new GitService(dir)
+    await expect(svc.merge('nonexistent')).rejects.toThrow()
+  })
+
+  it('merge: 로컬 변경과 충돌하는 머지는 throw 한다', async () => {
+    const dir = makeConflictRepo()
+    writeFileSync(join(dir, 'a.txt'), 'dirty\n')
+    const svc = new GitService(dir)
+    await expect(svc.merge('feature')).rejects.toThrow()
+    expect((await svc.status()).merging).toBe(false)
+  })
+
+  it('discard: staged 변경도 되돌린다', async () => {
+    const dir = makeRepo()
+    writeFileSync(join(dir, 'a.txt'), 'staged change\n')
+    const svc = new GitService(dir)
+    await svc.stage(['a.txt'])
+    await svc.discard(['a.txt'])
     expect((await svc.status()).files).toHaveLength(0)
   })
 })

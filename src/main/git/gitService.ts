@@ -94,18 +94,21 @@ export class GitService {
   }
 
   async stage(paths: string[]): Promise<void> {
+    if (paths.length === 0) return
     await this.git.add(paths)
   }
 
   async unstage(paths: string[]): Promise<void> {
+    if (paths.length === 0) return
     await this.git.raw(['restore', '--staged', '--', ...paths])
   }
 
   async discard(paths: string[]): Promise<void> {
+    if (paths.length === 0) return
     const s = await this.git.status()
     const untracked = paths.filter((p) => s.not_added.includes(p))
     const tracked = paths.filter((p) => !s.not_added.includes(p))
-    if (tracked.length) await this.git.raw(['checkout', '--', ...tracked])
+    if (tracked.length) await this.git.raw(['restore', '--source=HEAD', '--staged', '--worktree', '--', ...tracked])
     if (untracked.length) await this.git.raw(['clean', '-f', '--', ...untracked])
   }
 
@@ -140,10 +143,16 @@ export class GitService {
   async merge(branch: string): Promise<{ conflicts: boolean }> {
     try {
       await this.git.merge([branch])
-    } catch {
-      // simple-git may throw on conflict (English locale) — fall through to check status
+    } catch (err) {
+      // 충돌(MERGE_HEAD 생성)이면 conflicts로 보고, 그 외 진짜 실패는 재throw
+      const merging = existsSync(join(this.repoPath, '.git', 'MERGE_HEAD'))
+      if (merging) {
+        const s = await this.git.status()
+        if (s.conflicted.length > 0) return { conflicts: true }
+      }
+      throw err
     }
-    // Always check actual state: MERGE_HEAD or conflicted files indicate a conflict
+    // 예외 없이 끝났어도 한국어 로케일에서는 충돌 시 throw가 없을 수 있다
     const merging = existsSync(join(this.repoPath, '.git', 'MERGE_HEAD'))
     if (merging) {
       const s = await this.git.status()
