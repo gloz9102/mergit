@@ -10,6 +10,7 @@ export class RepoWatcher {
     this.stop()
     this.watcher = watch(repoPath, { recursive: true }, (_event, filename) => {
       const f = filename?.toString() ?? ''
+      // filename이 null(빈 문자열)이면 보수적으로 통과시켜 refresh를 유도한다
       if (f.startsWith('.git/objects') || f.startsWith('.git/logs') || f.endsWith('.lock')) return
       if (this.timer) clearTimeout(this.timer)
       this.timer = setTimeout(onChange, 300)

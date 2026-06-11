@@ -1,13 +1,11 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
-import { GIT_API_METHODS } from '../shared/api'
+import { GIT_API_METHODS, type Envelope } from '../shared/api'
 import { toGitError } from './git/errors'
 import { GitService } from './git/gitService'
 import { RepoWatcher } from './git/repoWatcher'
 
 let service: GitService | null = null
 const watcher = new RepoWatcher()
-
-type Envelope = { ok: true; data: unknown } | { ok: false; error: unknown }
 
 export function registerIpc(): void {
   ipcMain.handle('git:selectRepo', async (): Promise<Envelope> => {
@@ -21,7 +19,11 @@ export function registerIpc(): void {
       const info = await next.info()
       service = next
       const win = BrowserWindow.fromWebContents(event.sender)
-      watcher.start(path, () => win?.webContents.send('repo-changed'))
+      win?.once('closed', () => watcher.stop())
+      watcher.start(path, () => {
+        if (!win || win.isDestroyed()) return
+        win.webContents.send('repo-changed')
+      })
       return { ok: true, data: info }
     } catch (err) {
       return { ok: false, error: toGitError(err) }
@@ -34,6 +36,7 @@ export function registerIpc(): void {
       try {
         if (!service) throw new Error('no repository open')
         const fn = (service as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>)[method]
+        if (typeof fn !== 'function') throw new Error(`no such git method: ${method}`)
         return { ok: true, data: await fn.apply(service, args) }
       } catch (err) {
         return { ok: false, error: toGitError(err) }

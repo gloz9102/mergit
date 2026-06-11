@@ -1,7 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { GIT_API_METHODS } from '../shared/api'
-
-type Envelope = { ok: true; data: unknown } | { ok: false; error: unknown }
+import { GIT_API_METHODS, type Envelope } from '../shared/api'
 
 function unwrap(res: Envelope): unknown {
   if (res.ok) return res.data

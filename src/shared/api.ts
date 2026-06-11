@@ -7,6 +7,9 @@ import type {
   StatusDto
 } from './types'
 
+// IPC 응답 봉투 — main 핸들러와 preload unwrap이 공유
+export type Envelope = { ok: true; data: unknown } | { ok: false; error: unknown }
+
 export interface GitApi {
   selectRepo(): Promise<string | null>
   openRepo(path: string): Promise<RepoInfoDto>
