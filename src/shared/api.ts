@@ -70,3 +70,9 @@ export const GIT_API_METHODS = [
   'readWorkingFile',
   'saveResolved'
 ] as const
+
+// GitApi(onRepoChanged 제외)와 GIT_API_METHODS의 불일치 시 컴파일 에러
+type IpcMethods = Exclude<keyof GitApi, 'onRepoChanged'>
+type AssertSubset<T extends U, U> = T
+type _MethodsCoverApi = AssertSubset<IpcMethods, (typeof GIT_API_METHODS)[number]>
+type _MethodsOnlyApi = AssertSubset<(typeof GIT_API_METHODS)[number], IpcMethods>

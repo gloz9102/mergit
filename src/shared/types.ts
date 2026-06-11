@@ -46,8 +46,10 @@ export interface CommitFileDto {
   status: string // 'A' | 'M' | 'D' 등 name-status 첫 글자
 }
 
+export type GitErrorCode = 'GIT_ERROR' | 'CONFLICT' | 'AUTH' | 'NOT_A_REPO' | 'REMOTE' | 'NO_REPO'
+
 export interface GitErrorDto {
-  code: string // 'GIT_ERROR' | 'CONFLICT' | 'AUTH' | 'NOT_A_REPO' | 'REMOTE' | 'NO_REPO'
+  code: GitErrorCode
   message: string
   detail: string
 }
