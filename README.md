@@ -1,6 +1,7 @@
-# GitKraken Clone
+# Mergit
 
-GitKraken 스타일의 Electron git 클라이언트. 한국어/영어 지원, 3-패널 conflict 해결 에디터.
+**Mergit** (merge + git) — 머지와 conflict 해결에 강한 GitKraken 스타일 Electron git 클라이언트.
+한국어/영어 지원, 3-패널 conflict 해결 에디터.
 
 ## 요구 사항
 
