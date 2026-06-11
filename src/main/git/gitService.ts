@@ -67,7 +67,10 @@ export class GitService {
   }
 
   async commitFiles(hash: string): Promise<CommitFileDto[]> {
-    const raw = await this.git.raw(['diff-tree', '--no-commit-id', '--name-status', '-r', '--root', hash])
+    // -m --first-parent: 머지 커밋도 첫 부모 기준 변경 파일을 보여준다
+    const raw = await this.git.raw([
+      'diff-tree', '--no-commit-id', '--name-status', '-r', '--root', '-m', '--first-parent', hash
+    ])
     return raw
       .split('\n')
       .filter(Boolean)

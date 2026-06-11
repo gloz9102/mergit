@@ -7,7 +7,11 @@
 
 > ⚠️ 초기 버전입니다. 피드백과 이슈 제보를 환영합니다.
 
-<!-- TODO: 스크린샷 추가 — docs/screenshots/main.png (메인 그래프), conflict.png (3-패널 에디터) -->
+![메인 화면 — 커밋 그래프](docs/screenshots/main.png)
+
+3-패널 conflict 해결 에디터:
+
+![Conflict 해결 에디터](docs/screenshots/conflict.png)
 
 ## 주요 기능
 
