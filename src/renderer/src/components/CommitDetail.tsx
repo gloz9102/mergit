@@ -18,9 +18,18 @@ export function CommitDetail({ hash }: { hash: string }) {
   const [diff, setDiff] = useState<{ path: string; text: string } | null>(null)
 
   useEffect(() => {
+    let ignore = false
     setDiff(null)
     setFiles([])
-    window.api.commitFiles(hash).then(setFiles).catch(toastError)
+    window.api
+      .commitFiles(hash)
+      .then((result) => {
+        if (!ignore) setFiles(result)
+      })
+      .catch(toastError)
+    return () => {
+      ignore = true
+    }
   }, [hash])
 
   if (!commit) return null
