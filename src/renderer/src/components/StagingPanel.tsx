@@ -1,17 +1,18 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { FileStatusDto } from '../../../shared/types'
+import { splitPath } from '../lib/paths'
 import { run, toastError } from '../lib/run'
 import { useRepoStore } from '../stores/repoStore'
 import { useUiStore } from '../stores/uiStore'
-import { DiffViewer } from './DiffViewer'
 
 export function StagingPanel() {
   const { t } = useTranslation()
   const status = useRepoStore((s) => s.status)
   const ask = useUiStore((s) => s.ask)
+  const diffView = useUiStore((s) => s.diffView)
+  const openDiff = useUiStore((s) => s.openDiff)
   const [message, setMessage] = useState('')
-  const [diff, setDiff] = useState<{ path: string; text: string } | null>(null)
 
   if (!status) return null
   // 충돌 파일은 MergeBanner/ConflictEditor가 담당
@@ -20,10 +21,11 @@ export function StagingPanel() {
     (f) => !f.isConflicted && f.workingDir !== ' ' && f.workingDir !== ''
   )
 
+  // diff는 중앙 영역(DiffPanel)에 크게 표시한다
   async function showDiff(file: FileStatusDto, fromStaged: boolean): Promise<void> {
     try {
       const text = await window.api.diffWorkingFile(file.path, fromStaged)
-      setDiff({ path: file.path, text })
+      openDiff({ title: file.path, text })
     } catch (err) {
       toastError(err)
     }
@@ -35,24 +37,31 @@ export function StagingPanel() {
     void run(async () => {
       await window.api.commit(msg)
       setMessage('')
-      setDiff(null)
+      openDiff(null)
     }, 'toast.committed')
   }
 
   function fileRow(file: FileStatusDto, fromStaged: boolean) {
+    const { dir, base } = splitPath(file.path)
     return (
       <div key={file.path} className="group flex items-center gap-1 rounded px-1 hover:bg-zinc-800">
         <button
+          title={file.path}
           onClick={() => void showDiff(file, fromStaged)}
-          className="min-w-0 flex-1 truncate text-left font-mono text-xs"
+          className={`flex min-w-0 flex-1 items-baseline gap-1.5 rounded text-left font-mono text-xs ${
+            diffView?.title === file.path ? 'bg-zinc-700' : ''
+          }`}
         >
-          <span className="text-amber-400">{fromStaged ? file.index : file.workingDir}</span>{' '}
-          {file.path}
+          <span className="shrink-0 text-amber-400">
+            {fromStaged ? file.index : file.workingDir}
+          </span>
+          <span className="shrink-0 truncate text-zinc-200">{base}</span>
+          <span className="min-w-0 truncate text-[11px] text-zinc-500">{dir}</span>
         </button>
         {fromStaged ? (
           <button
             onClick={() => {
-              setDiff(null)
+              openDiff(null)
               void run(() => window.api.unstage([file.path]))
             }}
             className="hidden rounded px-1 text-xs text-zinc-400 hover:text-zinc-200 group-hover:block"
@@ -63,7 +72,7 @@ export function StagingPanel() {
           <>
             <button
               onClick={() => {
-                setDiff(null)
+                openDiff(null)
                 void run(() => window.api.stage([file.path]))
               }}
               className="hidden rounded px-1 text-xs text-emerald-400 hover:text-emerald-300 group-hover:block"
@@ -73,7 +82,7 @@ export function StagingPanel() {
             <button
               onClick={() =>
                 ask(t('common.discardConfirm', { name: file.path }), () => {
-                  setDiff(null)
+                  openDiff(null)
                   void run(() => window.api.discard([file.path]))
                 })
               }
@@ -92,11 +101,11 @@ export function StagingPanel() {
       <p className="text-xs uppercase text-zinc-500">
         {t('panel.unstaged')} ({unstaged.length})
       </p>
-      <div className="max-h-40 overflow-y-auto">{unstaged.map((f) => fileRow(f, false))}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto">{unstaged.map((f) => fileRow(f, false))}</div>
       <p className="text-xs uppercase text-zinc-500">
         {t('panel.staged')} ({staged.length})
       </p>
-      <div className="max-h-40 overflow-y-auto">{staged.map((f) => fileRow(f, true))}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto">{staged.map((f) => fileRow(f, true))}</div>
       <textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
@@ -111,11 +120,6 @@ export function StagingPanel() {
       >
         {t('panel.commit')}
       </button>
-      {diff && (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <DiffViewer text={diff.text} />
-        </div>
-      )}
     </div>
   )
 }
