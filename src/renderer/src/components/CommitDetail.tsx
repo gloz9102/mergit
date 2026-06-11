@@ -16,11 +16,14 @@ export function CommitDetail({ hash }: { hash: string }) {
   const commit = useRepoStore((s) => s.commits.find((c) => c.hash === hash))
   const [files, setFiles] = useState<CommitFileDto[]>([])
   const [diff, setDiff] = useState<{ path: string; text: string } | null>(null)
+  const hasCommit = !!commit
 
   useEffect(() => {
     let ignore = false
     setDiff(null)
     setFiles([])
+    // refresh로 커밋이 사라진 경우(브랜치 삭제 등) IPC 호출 생략
+    if (!hasCommit) return
     window.api
       .commitFiles(hash)
       .then((result) => {
@@ -30,7 +33,7 @@ export function CommitDetail({ hash }: { hash: string }) {
     return () => {
       ignore = true
     }
-  }, [hash])
+  }, [hash, hasCommit])
 
   if (!commit) return null
 
