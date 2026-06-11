@@ -29,7 +29,14 @@ export function MergeBanner() {
       ))}
       <div className="ml-auto flex gap-2">
         <button
-          onClick={() => ask(t('merge.abortConfirm'), () => void run(() => window.api.abortMerge()))}
+          onClick={() =>
+            ask(t('merge.abortConfirm'), () =>
+              void run(async () => {
+                await window.api.abortMerge()
+                openConflict(null)
+              }, 'toast.mergeAborted')
+            )
+          }
           className="rounded px-3 py-1 text-amber-200 hover:bg-amber-900"
         >
           {t('merge.abort')}

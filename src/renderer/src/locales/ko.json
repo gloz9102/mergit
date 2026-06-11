@@ -86,6 +86,7 @@
     "mergeConflict": "충돌이 발생했습니다 — 상단 배너에서 충돌 파일을 해결하세요",
     "branchCreated": "브랜치를 생성했습니다",
     "stashSaved": "스태시에 저장했습니다",
-    "resolvedSaved": "해결로 표시했습니다"
+    "resolvedSaved": "해결로 표시했습니다",
+    "mergeAborted": "머지를 중단했습니다"
   }
 }

@@ -86,6 +86,7 @@
     "mergeConflict": "Conflicts detected — resolve files from the banner above",
     "branchCreated": "Branch created",
     "stashSaved": "Saved to stash",
-    "resolvedSaved": "Marked as resolved"
+    "resolvedSaved": "Marked as resolved",
+    "mergeAborted": "Merge aborted"
   }
 }
