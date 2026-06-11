@@ -136,32 +136,43 @@ export function LeftPanel() {
         <div
           className="fixed z-50 w-56 rounded border border-zinc-600 bg-zinc-800 py-1 text-sm shadow-xl"
           style={{ left: menu.x, top: menu.y }}
+          onClick={(e) => e.stopPropagation()}
         >
           <MenuItem
             label={t('branch.checkout')}
-            onClick={() => checkout(menu.branch)}
+            onClick={() => {
+              checkout(menu.branch)
+              setMenu(null)
+            }}
             disabled={menu.branch.current}
           />
           <MenuItem
             label={t('branch.mergeInto', { target: status?.current ?? '' })}
-            onClick={() => mergeBranch(menu.branch)}
+            onClick={() => {
+              mergeBranch(menu.branch)
+              setMenu(null)
+            }}
             disabled={menu.branch.current}
           />
           {!menu.branch.isRemote && (
             <>
               <MenuItem
                 label={t('branch.rename')}
-                onClick={() => setRenaming({ from: menu.branch.name, value: menu.branch.name })}
+                onClick={() => {
+                  setRenaming({ from: menu.branch.name, value: menu.branch.name })
+                  setMenu(null)
+                }}
               />
               <MenuItem
                 label={t('branch.delete')}
                 danger
                 disabled={menu.branch.current}
-                onClick={() =>
+                onClick={() => {
                   ask(t('branch.deleteConfirm', { name: menu.branch.name }), () =>
                     void deleteBranch(menu.branch.name, false)
                   )
-                }
+                  setMenu(null)
+                }}
               />
             </>
           )}
