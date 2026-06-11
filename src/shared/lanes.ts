@@ -24,6 +24,8 @@ export function assignLanes(commits: CommitDto[]): Map<string, number> {
 
     // 첫 부모는 현재 레인을 잇고, 나머지 부모는 새 레인을 예약한다
     const [first, ...rest] = c.parents
+    // 첫 부모가 이미 다른 레인에 예약돼 있더라도 덮어씀.
+    // 중복 예약은 위 닫힘 루프가 다음 커밋 처리 시 수습한다.
     lanes[lane] = first ?? null
     for (const p of rest) {
       if (!lanes.includes(p)) {

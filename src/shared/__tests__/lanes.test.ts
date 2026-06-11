@@ -34,6 +34,23 @@ describe('assignLanes', () => {
     expect(lanes.get('y1')).toBe(0) // x1 레인이 닫혔으므로 재사용
   })
 
+  it('연속 머지: 레인이 3개까지 열렸다 닫힌다', () => {
+    const lanes = assignLanes([
+      commit('m2', ['m1', 'f2']),
+      commit('m1', ['c1', 'f1']),
+      commit('f2', ['c1']),
+      commit('c1', ['r']),
+      commit('f1', ['r']),
+      commit('r', [])
+    ])
+    expect(lanes.get('m2')).toBe(0)
+    expect(lanes.get('m1')).toBe(0)
+    expect(lanes.get('f2')).toBe(1)
+    expect(lanes.get('c1')).toBe(0)
+    expect(lanes.get('f1')).toBe(2)
+    expect(lanes.get('r')).toBe(0)
+  })
+
   it('빈 입력은 빈 맵', () => {
     expect(assignLanes([]).size).toBe(0)
   })
