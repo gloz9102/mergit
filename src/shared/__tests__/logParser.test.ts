@@ -37,6 +37,12 @@ describe('parseLog', () => {
     expect(commits[0].refs).toEqual(['HEAD -> main', 'origin/main'])
   })
 
+  it('refs에 tag 표기를 포함해 파싱한다', () => {
+    const raw = `t1${F}${F}A${F}a@t.com${F}2026-06-11T10:00:00+09:00${F}tagged${F}HEAD -> main, tag: v1.0, origin/main${R}\n`
+    const commits = parseLog(raw)
+    expect(commits[0].refs).toEqual(['HEAD -> main', 'tag: v1.0', 'origin/main'])
+  })
+
   it('빈 입력이면 빈 배열을 반환한다', () => {
     expect(parseLog('')).toEqual([])
     expect(parseLog('\n')).toEqual([])
