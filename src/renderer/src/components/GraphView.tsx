@@ -63,14 +63,16 @@ export function GraphView() {
 
   const edges: ReactNode[] = []
   const nodes: ReactNode[] = []
-  for (let i = start; i < end; i++) {
+  // 엣지는 출발/도착이 화면 밖이어도 선이 뷰포트를 가로지를 수 있으므로
+  // 전체를 순회하고 가시 범위와 교차하는 것만 그린다
+  for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
     if (row.type !== 'commit') continue
     const lane = lanes.get(row.commit.hash) ?? 0
-    nodes.push(<circle key={row.commit.hash} cx={x(lane)} cy={y(i)} r="4" fill={color(lane)} />)
     for (const p of row.commit.parents) {
       const pr = rowOf.get(p)
       if (pr === undefined) continue
+      if (Math.max(i, pr) < start || Math.min(i, pr) > end) continue
       const pl = lanes.get(p) ?? 0
       edges.push(
         <path
@@ -82,6 +84,12 @@ export function GraphView() {
         />
       )
     }
+  }
+  for (let i = start; i < end; i++) {
+    const row = rows[i]
+    if (row.type !== 'commit') continue
+    const lane = lanes.get(row.commit.hash) ?? 0
+    nodes.push(<circle key={row.commit.hash} cx={x(lane)} cy={y(i)} r="4" fill={color(lane)} />)
   }
 
   return (
