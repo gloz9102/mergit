@@ -1,0 +1,91 @@
+{
+  "app": {
+    "openRepo": "Open Repository",
+    "noRepo": "Open a git repository to get started",
+    "recentRepos": "Recent repositories"
+  },
+  "toolbar": {
+    "pull": "Pull",
+    "push": "Push",
+    "fetch": "Fetch",
+    "branch": "Branch",
+    "stash": "Stash",
+    "settings": "Settings"
+  },
+  "panel": {
+    "local": "LOCAL",
+    "remote": "REMOTE",
+    "stash": "STASH",
+    "wip": "Work in progress",
+    "unstaged": "Unstaged",
+    "staged": "Staged",
+    "commitMessagePlaceholder": "Enter commit message",
+    "commit": "Commit",
+    "stage": "Stage",
+    "unstage": "Unstage",
+    "discard": "Discard",
+    "files": "Changed files",
+    "noCommitSelected": "Select a commit",
+    "parents": "Parents"
+  },
+  "branch": {
+    "checkout": "Checkout",
+    "mergeInto": "Merge into current ({{target}})",
+    "delete": "Delete",
+    "rename": "Rename",
+    "create": "New branch",
+    "namePlaceholder": "Branch name",
+    "deleteConfirm": "Delete branch '{{name}}'?",
+    "forceDeleteConfirm": "Branch '{{name}}' is not fully merged. Force delete?"
+  },
+  "merge": {
+    "inProgress": "Merge in progress",
+    "conflictedFiles": "{{count}} conflicted file(s)",
+    "abort": "Abort merge",
+    "abortConfirm": "Abort the merge in progress? Your resolutions will be lost.",
+    "commitMerge": "Commit merge",
+    "resolved": "{{resolved}}/{{total}} resolved",
+    "ours": "Ours — {{label}}",
+    "theirs": "Theirs — {{label}}",
+    "output": "Output (editable)",
+    "save": "Save & mark resolved",
+    "prev": "Prev conflict",
+    "next": "Next conflict"
+  },
+  "stash": {
+    "apply": "Apply",
+    "drop": "Drop",
+    "dropConfirm": "Drop stash '{{name}}'?"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "close": "Close"
+  },
+  "common": {
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "close": "Close",
+    "detail": "Details",
+    "discardConfirm": "Discard changes in '{{name}}'? This cannot be undone."
+  },
+  "error": {
+    "GIT_ERROR": "Git operation failed",
+    "CONFLICT": "Conflicts detected",
+    "AUTH": "Authentication failed. Check your system git credential helper / SSH keys",
+    "NOT_A_REPO": "Not a git repository",
+    "REMOTE": "Remote operation failed",
+    "NO_REPO": "No repository is open"
+  },
+  "toast": {
+    "pulled": "Pull complete",
+    "pushed": "Push complete",
+    "fetched": "Fetch complete",
+    "committed": "Committed",
+    "merged": "Merge complete",
+    "mergeConflict": "Conflicts detected — resolve files from the banner above",
+    "branchCreated": "Branch created",
+    "stashSaved": "Saved to stash",
+    "resolvedSaved": "Marked as resolved"
+  }
+}
