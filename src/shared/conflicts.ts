@@ -1,5 +1,8 @@
 import type { ConflictChoice, ConflictSegment } from './types'
 
+// git 구분자는 정확히 7개의 '=' (CRLF 파일은 후행 \r 허용)
+const isSeparator = (l: string): boolean => /^=======\r?$/.test(l)
+
 export function parseConflicts(content: string): ConflictSegment[] {
   const lines = content.split('\n')
   const segments: ConflictSegment[] = []
@@ -16,13 +19,14 @@ export function parseConflicts(content: string): ConflictSegment[] {
       const oursLabel = line.slice(7).trim()
       const ours: string[] = []
       i++
-      while (i < lines.length && !lines[i].startsWith('=======') && !lines[i].startsWith('|||||||')) {
+      while (i < lines.length && !isSeparator(lines[i]) && !lines[i].startsWith('|||||||')) {
         ours.push(lines[i])
         i++
       }
       // diff3 스타일 base 섹션은 ======= 까지 건너뛴다
+      // ours 수집 루프는 ||||||| 에서 멈추므로 여기서 base 섹션을 ======= 직전까지 소진한다
       if (i < lines.length && lines[i].startsWith('|||||||')) {
-        while (i < lines.length && !lines[i].startsWith('=======')) i++
+        while (i < lines.length && !isSeparator(lines[i])) i++
       }
       i++ // '=======' 건너뛰기
       const theirs: string[] = []

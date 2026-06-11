@@ -61,6 +61,26 @@ b2
     const conflicts = segs.filter((s) => s.type === 'conflict')
     expect(conflicts).toHaveLength(2)
   })
+
+  it('내용 라인이 =======로 시작해도 8자 이상이면 구분자로 취급하지 않는다', () => {
+    const content = `<<<<<<< HEAD
+=======text
+=======
+theirs
+>>>>>>> f
+`
+    const segs = parseConflicts(content)
+    expect(segs[0]).toMatchObject({ type: 'conflict', ours: ['=======text'], theirs: ['theirs'] })
+  })
+
+  it('>>>>>>>가 누락된 비정상 파일도 크래시 없이 파싱한다', () => {
+    const content = `<<<<<<< HEAD
+ours
+=======
+theirs`
+    const segs = parseConflicts(content)
+    expect(segs[0]).toMatchObject({ type: 'conflict', ours: ['ours'], theirs: ['theirs'], theirsLabel: '' })
+  })
 })
 
 describe('buildOutput', () => {
