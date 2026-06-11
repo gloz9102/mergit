@@ -6,31 +6,33 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "dist:win": "electron-vite build && electron-builder --win --x64",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@codemirror/state": "^6.6.0",
-    "@codemirror/view": "^6.43.1",
-    "codemirror": "^6.0.2",
-    "i18next": "^26.3.1",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "react-i18next": "^17.0.8",
-    "simple-git": "^3.36.0",
-    "zustand": "^5.0.14"
+    "simple-git": "^3.36.0"
   },
   "devDependencies": {
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.43.1",
     "@tailwindcss/vite": "^4.3.0",
     "@types/node": "^25.9.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.7.0",
+    "codemirror": "^6.0.2",
     "electron": "^42.4.0",
+    "electron-builder": "^26.15.2",
     "electron-vite": "^5.0.0",
+    "i18next": "^26.3.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-i18next": "^17.0.8",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
     "vite": "^7.3.5",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.8",
+    "zustand": "^5.0.14"
   }
 }

@@ -1,0 +1,16 @@
+appId: io.mergit.app
+productName: Mergit
+directories:
+  output: release
+files:
+  - out/**
+win:
+  target:
+    - nsis
+    - portable
+nsis:
+  oneClick: true
+  deleteAppDataOnUninstall: true
+  artifactName: ${productName}-Setup-${version}.${ext}
+portable:
+  artifactName: ${productName}-Portable-${version}.${ext}
