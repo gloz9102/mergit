@@ -9,12 +9,18 @@ export function Toasts() {
   const [expanded, setExpanded] = useState<number | null>(null)
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex w-96 flex-col gap-2">
+    <div className="fixed bottom-4 right-4 z-40 flex w-96 flex-col gap-2">
       {toasts.map((toast) => (
         <div key={toast.id} className="rounded border border-zinc-600 bg-zinc-800 p-3 text-sm shadow-lg">
           <div className="flex items-start justify-between gap-2">
             <span>{toast.message}</span>
-            <button onClick={() => dismiss(toast.id)} className="text-zinc-500 hover:text-zinc-300">
+            <button
+              onClick={() => {
+                dismiss(toast.id)
+                setExpanded((prev) => (prev === toast.id ? null : prev))
+              }}
+              className="text-zinc-500 hover:text-zinc-300"
+            >
               ✕
             </button>
           </div>

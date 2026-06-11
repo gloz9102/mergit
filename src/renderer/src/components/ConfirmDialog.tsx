@@ -8,7 +8,7 @@ export function ConfirmDialog() {
   if (!confirm) return null
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-96 rounded-lg border border-zinc-600 bg-zinc-800 p-4">
         <p className="text-sm">{confirm.message}</p>
         <div className="mt-4 flex justify-end gap-2">

@@ -59,7 +59,10 @@ export function Toolbar() {
           value={branchName}
           onChange={(e) => setBranchName(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') createBranch()
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              createBranch()
+            }
             if (e.key === 'Escape') setBranchName(null)
           }}
           onBlur={() => setBranchName(null)}
