@@ -57,7 +57,8 @@ git 관리 기능(로컬 + 원격)과 conflict 해결에 특화된 UI/UX를 제�
     모든 UI 문자열은 키 기반. 최초 실행 시 시스템 로케일 감지, 설정 모달에서
     전환, 선택값은 로컬 설정 파일에 저장.
   - 스타일: Tailwind CSS, GitKraken풍 다크 테마 기본.
-  - 에디터: CodeMirror 6 — conflict Output 패널(편집 가능), diff 뷰어(읽기 전용).
+  - 에디터: CodeMirror 6 — conflict Output 패널(편집 가능)에 사용.
+    diff 뷰어(읽기 전용)는 라인 단위 컬러링의 경량 커스텀 렌더링.
 
 ## 화면 구성 (3단 클래식)
 
