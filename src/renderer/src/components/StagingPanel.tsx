@@ -16,7 +16,9 @@ export function StagingPanel() {
   if (!status) return null
   // 충돌 파일은 MergeBanner/ConflictEditor가 담당
   const staged = status.files.filter((f) => !f.isConflicted && f.index !== ' ' && f.index !== '?')
-  const unstaged = status.files.filter((f) => !f.isConflicted && f.workingDir !== ' ')
+  const unstaged = status.files.filter(
+    (f) => !f.isConflicted && f.workingDir !== ' ' && f.workingDir !== ''
+  )
 
   async function showDiff(file: FileStatusDto, fromStaged: boolean): Promise<void> {
     try {
@@ -33,6 +35,7 @@ export function StagingPanel() {
     void run(async () => {
       await window.api.commit(msg)
       setMessage('')
+      setDiff(null)
     }, 'toast.committed')
   }
 
@@ -48,7 +51,10 @@ export function StagingPanel() {
         </button>
         {fromStaged ? (
           <button
-            onClick={() => void run(() => window.api.unstage([file.path]))}
+            onClick={() => {
+              setDiff(null)
+              void run(() => window.api.unstage([file.path]))
+            }}
             className="hidden rounded px-1 text-xs text-zinc-400 hover:text-zinc-200 group-hover:block"
           >
             {t('panel.unstage')}
@@ -56,16 +62,20 @@ export function StagingPanel() {
         ) : (
           <>
             <button
-              onClick={() => void run(() => window.api.stage([file.path]))}
+              onClick={() => {
+                setDiff(null)
+                void run(() => window.api.stage([file.path]))
+              }}
               className="hidden rounded px-1 text-xs text-emerald-400 hover:text-emerald-300 group-hover:block"
             >
               {t('panel.stage')}
             </button>
             <button
               onClick={() =>
-                ask(t('common.discardConfirm', { name: file.path }), () =>
+                ask(t('common.discardConfirm', { name: file.path }), () => {
+                  setDiff(null)
                   void run(() => window.api.discard([file.path]))
-                )
+                })
               }
               className="hidden rounded px-1 text-xs text-red-400 hover:text-red-300 group-hover:block"
             >
@@ -101,7 +111,11 @@ export function StagingPanel() {
       >
         {t('panel.commit')}
       </button>
-      {diff && <DiffViewer text={diff.text} />}
+      {diff && (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <DiffViewer text={diff.text} />
+        </div>
+      )}
     </div>
   )
 }
