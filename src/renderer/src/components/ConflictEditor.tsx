@@ -24,6 +24,10 @@ export function ConflictEditor() {
   useEffect(() => {
     if (!file) return
     setFocus(0)
+    // 파일 전환 시 이전 파일 내용이 한 프레임 노출되지 않도록 비운다
+    setSegments([])
+    setChoices([])
+    setOutput('')
     window.api
       .readWorkingFile(file)
       .then((content) => {
