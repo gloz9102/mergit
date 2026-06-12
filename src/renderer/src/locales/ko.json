@@ -24,9 +24,14 @@
     "stage": "스테이지",
     "unstage": "언스테이지",
     "discard": "변경 취소",
+    "stashFile": "스태시",
     "files": "변경 파일",
     "noCommitSelected": "커밋을 선택하세요",
-    "parents": "부모"
+    "parents": "부모",
+    "loadingMore": "커밋 불러오는 중...",
+    "amend": "이전 커밋 수정 (amend)",
+    "amendCommit": "Amend 커밋",
+    "amendPushedConfirm": "마지막 커밋은 이미 푸시되었습니다. amend 하면 원격 히스토리와 갈라집니다. 계속할까요?"
   },
   "branch": {
     "checkout": "체크아웃",
@@ -38,12 +43,30 @@
     "deleteConfirm": "'{{name}}' 브랜치를 삭제할까요?",
     "forceDeleteConfirm": "'{{name}}' 브랜치는 머지되지 않았습니다. 강제로 삭제할까요?"
   },
+  "commit": {
+    "cherryPick": "현재 브랜치에 체리픽",
+    "revert": "이 커밋 되돌리기 (revert)",
+    "undoLast": "마지막 커밋 취소 (soft reset)",
+    "undoLastConfirm": "마지막 커밋 '{{subject}}'을(를) 취소할까요? 변경 내용은 스테이지에 남습니다.",
+    "undoLastPushedConfirm": "'{{subject}}'은(는) 이미 푸시된 커밋입니다. 취소하면 원격 히스토리와 갈라집니다. 계속할까요?"
+  },
+  "commitSearch": {
+    "label": "커밋",
+    "placeholder": "커밋 검색 (메시지·작성자)... Enter: 다음, Shift+Enter: 이전",
+    "matchCount": "{{count}}개 일치",
+    "noMatch": "일치하는 커밋이 없습니다",
+    "searching": "검색 중..."
+  },
   "merge": {
     "inProgress": "머지 진행 중",
+    "cherryPickInProgress": "체리픽 진행 중",
+    "revertInProgress": "리버트 진행 중",
+    "conflictsOnly": "충돌 해결 필요",
     "conflictedFiles": "충돌 파일 {{count}}개",
-    "abort": "머지 중단",
-    "abortConfirm": "진행 중인 머지를 중단할까요? 해결한 내용이 사라집니다.",
+    "abort": "작업 중단",
+    "abortConfirm": "진행 중인 작업을 중단할까요? 해결한 내용이 사라집니다.",
     "commitMerge": "머지 커밋",
+    "continue": "계속 진행",
     "resolved": "{{resolved}}/{{total}} 해결됨",
     "ours": "Ours — {{label}}",
     "theirs": "Theirs — {{label}}",
@@ -54,8 +77,10 @@
   },
   "stash": {
     "apply": "적용",
+    "pop": "Pop",
     "drop": "삭제",
-    "dropConfirm": "스태시 '{{name}}'을(를) 삭제할까요?"
+    "dropConfirm": "스태시 '{{name}}'을(를) 삭제할까요?",
+    "messagePlaceholder": "스태시 메시지 (선택)"
   },
   "branchSearch": {
     "filterLabel": "필터",
@@ -88,11 +113,16 @@
     "pushed": "Push 완료",
     "fetched": "Fetch 완료",
     "committed": "커밋 완료",
+    "amended": "커밋을 수정했습니다",
     "merged": "머지 완료",
+    "cherryPicked": "체리픽 완료",
+    "reverted": "Revert 완료",
+    "undidCommit": "마지막 커밋을 취소했습니다",
     "mergeConflict": "충돌이 발생했습니다 — 상단 배너에서 충돌 파일을 해결하세요",
     "branchCreated": "브랜치를 생성했습니다",
     "stashSaved": "스태시에 저장했습니다",
+    "stashPopped": "스태시를 적용하고 제거했습니다",
     "resolvedSaved": "해결로 표시했습니다",
-    "mergeAborted": "머지를 중단했습니다"
+    "operationAborted": "작업을 중단했습니다"
   }
 }

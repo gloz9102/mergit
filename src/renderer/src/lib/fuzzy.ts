@@ -20,3 +20,12 @@ export function fuzzyMatch(query: string, target: string): FuzzyMatch {
   if (qi !== q.length) return { matched: false, indices: [] }
   return { matched: true, indices }
 }
+
+// query가 target에 연속 부분 문자열로 등장하면 매칭. 대소문자 무시.
+// 커밋 검색(git --grep -i -F)과 같은 의미론이라 하이라이트 근거가 일치한다.
+export function substringMatch(query: string, target: string): FuzzyMatch {
+  if (!query) return { matched: true, indices: [] }
+  const at = target.toLowerCase().indexOf(query.toLowerCase())
+  if (at === -1) return { matched: false, indices: [] }
+  return { matched: true, indices: Array.from({ length: query.length }, (_, i) => at + i) }
+}

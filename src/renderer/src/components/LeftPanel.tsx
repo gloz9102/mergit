@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { BranchDto, GitErrorDto } from '../../../shared/types'
 import { fuzzyMatch } from '../lib/fuzzy'
 import { run, toastError } from '../lib/run'
 import { useRepoStore } from '../stores/repoStore'
 import { useUiStore } from '../stores/uiStore'
+import { ContextMenu, MenuItem } from './ContextMenu'
+import { Highlight } from './Highlight'
 
 interface MenuState {
   x: number
@@ -25,13 +27,6 @@ export function LeftPanel() {
   const closeBranchQuery = useUiStore((s) => s.closeBranchQuery)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [renaming, setRenaming] = useState<{ from: string; value: string } | null>(null)
-
-  useEffect(() => {
-    if (!menu) return
-    const close = (): void => setMenu(null)
-    window.addEventListener('click', close)
-    return () => window.removeEventListener('click', close)
-  }, [menu])
 
   // filter 모드: 비매칭 제거 / search 모드 또는 비활성: 전부 표시. 매칭 인덱스는 하이라이트용.
   const { locals, remotes } = useMemo(() => {
@@ -166,6 +161,12 @@ export function LeftPanel() {
         <div key={stash.index} className="group flex items-center gap-1 rounded px-1 hover:bg-zinc-800">
           <span className="min-w-0 flex-1 truncate text-sm">{stash.message}</span>
           <button
+            onClick={() => void run(() => window.api.stashPop(stash.index), 'toast.stashPopped', 'stash')}
+            className="hidden text-xs text-emerald-400 group-hover:block"
+          >
+            {t('stash.pop')}
+          </button>
+          <button
             onClick={() => void run(() => window.api.stashApply(stash.index), undefined, 'stash')}
             className="hidden text-xs text-emerald-400 group-hover:block"
           >
@@ -185,11 +186,7 @@ export function LeftPanel() {
       ))}
 
       {menu && (
-        <div
-          className="fixed z-50 w-56 rounded border border-zinc-600 bg-zinc-800 py-1 text-sm shadow-xl"
-          style={{ left: menu.x, top: menu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
+        <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
           <MenuItem
             label={t('branch.checkout')}
             onClick={() => {
@@ -229,51 +226,8 @@ export function LeftPanel() {
               />
             </>
           )}
-        </div>
+        </ContextMenu>
       )}
     </div>
-  )
-}
-
-// 매칭 인덱스 위치의 문자를 강조해 브랜치 이름을 렌더
-function Highlight({ text, indices }: { text: string; indices: number[] }) {
-  if (indices.length === 0) return <>{text}</>
-  const set = new Set(indices)
-  return (
-    <>
-      {[...text].map((ch, i) =>
-        set.has(i) ? (
-          <span key={i} className="rounded-sm bg-emerald-500/30 font-semibold text-emerald-300">
-            {ch}
-          </span>
-        ) : (
-          <span key={i}>{ch}</span>
-        )
-      )}
-    </>
-  )
-}
-
-function MenuItem({
-  label,
-  onClick,
-  disabled,
-  danger
-}: {
-  label: string
-  onClick: () => void
-  disabled?: boolean
-  danger?: boolean
-}) {
-  return (
-    <button
-      disabled={disabled}
-      onClick={onClick}
-      className={`block w-full px-3 py-1 text-left hover:bg-zinc-700 disabled:opacity-40 disabled:hover:bg-transparent ${
-        danger ? 'text-red-400' : ''
-      }`}
-    >
-      {label}
-    </button>
   )
 }

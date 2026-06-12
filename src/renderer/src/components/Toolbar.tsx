@@ -22,6 +22,7 @@ export function Toolbar() {
   const pending = useUiStore((s) => s.pending)
   const setPending = useUiStore((s) => s.setPending)
   const [branchName, setBranchName] = useState<string | null>(null) // null = 입력창 닫힘
+  const [stashMessage, setStashMessage] = useState<string | null>(null) // null = 입력창 닫힘
 
   const anyPending = Object.values(pending).some(Boolean)
 
@@ -44,6 +45,13 @@ export function Toolbar() {
     if (!name) return
     setBranchName(null)
     void run(() => window.api.createBranch(name, true), 'toast.branchCreated')
+  }
+
+  function saveStash(): void {
+    const msg = stashMessage?.trim() ?? ''
+    setStashMessage(null)
+    // 빈 메시지는 서비스가 'WIP'로 처리한다
+    void run(() => window.api.stashSave(msg), 'toast.stashSaved', 'stash')
   }
 
   const btn =
@@ -101,14 +109,32 @@ export function Toolbar() {
           className="rounded bg-zinc-900 px-2 py-1 text-sm outline-none ring-1 ring-emerald-500"
         />
       )}
-      <button
-        className={btn}
-        disabled={!repo || !status || status.files.length === 0 || !!pending['stash']}
-        onClick={() => void run(() => window.api.stashSave(''), 'toast.stashSaved', 'stash')}
-      >
-        {pending['stash'] && <Spinner />}
-        {t('toolbar.stash')}
-      </button>
+      {stashMessage === null ? (
+        <button
+          className={btn}
+          disabled={!repo || !status || status.files.length === 0 || !!pending['stash']}
+          onClick={() => setStashMessage('')}
+        >
+          {pending['stash'] && <Spinner />}
+          {t('toolbar.stash')}
+        </button>
+      ) : (
+        <input
+          autoFocus
+          value={stashMessage}
+          onChange={(e) => setStashMessage(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              saveStash()
+            }
+            if (e.key === 'Escape') setStashMessage(null)
+          }}
+          onBlur={() => setStashMessage(null)}
+          placeholder={t('stash.messagePlaceholder')}
+          className="rounded bg-zinc-900 px-2 py-1 text-sm outline-none ring-1 ring-emerald-500"
+        />
+      )}
       <div className="ml-auto flex items-center gap-2">
         {anyPending && (
           <span aria-hidden className="inline-block animate-spin text-emerald-400">

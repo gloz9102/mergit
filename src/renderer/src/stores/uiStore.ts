@@ -14,6 +14,11 @@ export interface BranchQuery {
   text: string
 }
 
+// 커밋 그래프 검색(메시지·작성자) — 브랜치 검색과 동시에 열리지 않는다
+export interface CommitQuery {
+  text: string
+}
+
 interface Toast {
   id: number
   message: string
@@ -35,12 +40,16 @@ interface UiState {
   pending: Record<string, boolean>
   diffView: DiffView | null
   branchQuery: BranchQuery | null
+  commitQuery: CommitQuery | null
   select(sel: Selection): void
   openDiff(view: DiffView | null): void
   startFilter(initial: string): void
   startSearch(): void
   setBranchQueryText(text: string): void
   closeBranchQuery(): void
+  openCommitSearch(): void
+  setCommitQueryText(text: string): void
+  closeCommitSearch(): void
   openConflict(path: string | null): void
   setShowSettings(v: boolean): void
   pushToast(message: string, detail?: string): void
@@ -62,14 +71,16 @@ export const useUiStore = create<UiState>((set) => ({
   diffView: null,
 
   branchQuery: null,
+  commitQuery: null,
 
   // 선택이 바뀌면 보고 있던 diff는 의미가 없어지므로 함께 닫는다
   select: (selected) => set({ selected, diffView: null }),
   openDiff: (diffView) => set({ diffView }),
 
-  startFilter: (initial) => set({ branchQuery: { mode: 'filter', text: initial } }),
+  // 브랜치/커밋 검색은 상호 배타 — autoFocus 인풋이 동시에 두 개 열리는 것을 막는다
+  startFilter: (initial) => set({ branchQuery: { mode: 'filter', text: initial }, commitQuery: null }),
   // 필터 중이어도 비우고 검색으로 전환 (요구사항: 필터링 중이면 중지)
-  startSearch: () => set({ branchQuery: { mode: 'search', text: '' } }),
+  startSearch: () => set({ branchQuery: { mode: 'search', text: '' }, commitQuery: null }),
   setBranchQueryText: (text) =>
     set((s) => {
       if (!s.branchQuery) return {}
@@ -78,6 +89,10 @@ export const useUiStore = create<UiState>((set) => ({
       return { branchQuery: { ...s.branchQuery, text } }
     }),
   closeBranchQuery: () => set({ branchQuery: null }),
+
+  openCommitSearch: () => set({ commitQuery: { text: '' }, branchQuery: null }),
+  setCommitQueryText: (text) => set((s) => (s.commitQuery ? { commitQuery: { text } } : {})),
+  closeCommitSearch: () => set({ commitQuery: null }),
   openConflict: (conflictFile) => set({ conflictFile }),
   setShowSettings: (showSettings) => set({ showSettings }),
 

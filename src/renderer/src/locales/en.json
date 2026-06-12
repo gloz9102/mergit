@@ -24,9 +24,14 @@
     "stage": "Stage",
     "unstage": "Unstage",
     "discard": "Discard",
+    "stashFile": "Stash",
     "files": "Changed files",
     "noCommitSelected": "Select a commit",
-    "parents": "Parents"
+    "parents": "Parents",
+    "loadingMore": "Loading commits...",
+    "amend": "Amend previous commit",
+    "amendCommit": "Amend commit",
+    "amendPushedConfirm": "The last commit is already pushed. Amending will diverge from the remote history. Continue?"
   },
   "branch": {
     "checkout": "Checkout",
@@ -38,12 +43,30 @@
     "deleteConfirm": "Delete branch '{{name}}'?",
     "forceDeleteConfirm": "Branch '{{name}}' is not fully merged. Force delete?"
   },
+  "commit": {
+    "cherryPick": "Cherry-pick onto current branch",
+    "revert": "Revert this commit",
+    "undoLast": "Undo last commit (soft reset)",
+    "undoLastConfirm": "Undo last commit '{{subject}}'? Changes will remain staged.",
+    "undoLastPushedConfirm": "'{{subject}}' is already pushed. Undoing will diverge from the remote history. Continue?"
+  },
+  "commitSearch": {
+    "label": "Commit",
+    "placeholder": "Search commits (message, author)... Enter: next, Shift+Enter: prev",
+    "matchCount": "{{count}} matched",
+    "noMatch": "No matching commits",
+    "searching": "Searching..."
+  },
   "merge": {
     "inProgress": "Merge in progress",
+    "cherryPickInProgress": "Cherry-pick in progress",
+    "revertInProgress": "Revert in progress",
+    "conflictsOnly": "Conflicts need resolution",
     "conflictedFiles": "{{count}} conflicted file(s)",
-    "abort": "Abort merge",
-    "abortConfirm": "Abort the merge in progress? Your resolutions will be lost.",
+    "abort": "Abort",
+    "abortConfirm": "Abort the operation in progress? Your resolutions will be lost.",
     "commitMerge": "Commit merge",
+    "continue": "Continue",
     "resolved": "{{resolved}}/{{total}} resolved",
     "ours": "Ours — {{label}}",
     "theirs": "Theirs — {{label}}",
@@ -54,8 +77,10 @@
   },
   "stash": {
     "apply": "Apply",
+    "pop": "Pop",
     "drop": "Drop",
-    "dropConfirm": "Drop stash '{{name}}'?"
+    "dropConfirm": "Drop stash '{{name}}'?",
+    "messagePlaceholder": "Stash message (optional)"
   },
   "branchSearch": {
     "filterLabel": "Filter",
@@ -88,11 +113,16 @@
     "pushed": "Push complete",
     "fetched": "Fetch complete",
     "committed": "Committed",
+    "amended": "Commit amended",
     "merged": "Merge complete",
+    "cherryPicked": "Cherry-pick complete",
+    "reverted": "Revert complete",
+    "undidCommit": "Last commit undone",
     "mergeConflict": "Conflicts detected — resolve files from the banner above",
     "branchCreated": "Branch created",
     "stashSaved": "Saved to stash",
+    "stashPopped": "Stash popped",
     "resolvedSaved": "Marked as resolved",
-    "mergeAborted": "Merge aborted"
+    "operationAborted": "Operation aborted"
   }
 }

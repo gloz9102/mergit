@@ -26,11 +26,14 @@ export interface FileStatusDto {
   isConflicted: boolean
 }
 
+// 충돌 해결이 필요할 수 있는 진행 중 작업 (.git 상태 파일 기준)
+export type RepoOperation = 'merge' | 'cherry-pick' | 'revert'
+
 export interface StatusDto {
   current: string | null
   files: FileStatusDto[]
   conflicted: string[]
-  merging: boolean
+  operation: RepoOperation | null
   ahead: number
   behind: number
   tracking: string | null

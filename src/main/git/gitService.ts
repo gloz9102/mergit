@@ -25,11 +25,42 @@ export class GitService {
     return { path: this.repoPath, name: basename(this.repoPath) }
   }
 
-  async log(): Promise<CommitDto[]> {
+  // .git 디렉토리 안의 상태 파일 존재 여부 (MERGE_HEAD 등)
+  private hasGitFile(name: string): boolean {
+    return existsSync(join(this.repoPath, '.git', name))
+  }
+
+  async log(skip: number, maxCount: number): Promise<CommitDto[]> {
     const head = await this.git.raw(['rev-list', '-n', '1', '--all']).catch(() => '')
     if (!head.trim()) return [] // 커밋 0개인 저장소
-    const raw = await this.git.raw(['log', '--all', '--date-order', `--format=${LOG_FORMAT}`])
+    const raw = await this.git.raw([
+      'log',
+      '--all',
+      '--date-order',
+      `--skip=${skip}`,
+      `--max-count=${maxCount}`,
+      `--format=${LOG_FORMAT}`
+    ])
     return parseLog(raw)
+  }
+
+  // 메시지 또는 작성자가 text와 부분 일치(대소문자 무시)하는 커밋 해시 목록.
+  // --grep과 --author를 한 호출에 넣으면 AND가 되므로 따로 실행해 합집합(OR)을 만든다.
+  // -F: 사용자가 입력한 '.', '[' 등을 정규식이 아닌 리터럴로 취급
+  async searchCommits(text: string): Promise<string[]> {
+    if (!text) return []
+    const head = await this.git.raw(['rev-list', '-n', '1', '--all']).catch(() => '')
+    if (!head.trim()) return []
+    const [byMessage, byAuthor] = await Promise.all([
+      this.git.raw(['log', '--all', '-i', '-F', `--grep=${text}`, '--format=%H']),
+      this.git.raw(['log', '--all', '-i', '-F', `--author=${text}`, '--format=%H'])
+    ])
+    const seen = new Set<string>()
+    for (const line of `${byMessage}\n${byAuthor}`.split('\n')) {
+      const hash = line.trim()
+      if (hash) seen.add(hash)
+    }
+    return [...seen]
   }
 
   async status(): Promise<StatusDto> {
@@ -43,7 +74,14 @@ export class GitService {
         isConflicted: s.conflicted.includes(f.path)
       })),
       conflicted: s.conflicted,
-      merging: existsSync(join(this.repoPath, '.git', 'MERGE_HEAD')),
+      // cherry-pick/revert 충돌 중에는 MERGE_HEAD가 없으므로 우선순위 판정이 안전하다
+      operation: this.hasGitFile('CHERRY_PICK_HEAD')
+        ? 'cherry-pick'
+        : this.hasGitFile('REVERT_HEAD')
+          ? 'revert'
+          : this.hasGitFile('MERGE_HEAD')
+            ? 'merge'
+            : null,
       ahead: s.ahead,
       behind: s.behind,
       tracking: s.tracking ?? null
@@ -115,13 +153,26 @@ export class GitService {
     if (untracked.length) await this.git.raw(['clean', '-f', '--', ...untracked])
   }
 
-  async commit(message: string): Promise<void> {
-    await this.git.commit(message)
+  async commit(message: string, amend = false): Promise<void> {
+    if (amend) await this.git.raw(['commit', '--amend', '-m', message])
+    else await this.git.commit(message)
   }
 
-  // 머지 커밋: .git/MERGE_MSG의 기본 메시지를 그대로 사용
-  async commitMerge(): Promise<void> {
-    await this.git.raw(['commit', '--no-edit'])
+  // amend 입력창 prefill용 — subject만 쓰면 본문이 유실되므로 %B(전체 메시지)를 쓴다
+  async lastCommitMessage(): Promise<string> {
+    const head = await this.git.raw(['rev-parse', '--verify', 'HEAD']).catch(() => '')
+    if (!head.trim()) return ''
+    const msg = await this.git.raw(['log', '-1', '--format=%B'])
+    return msg.trimEnd()
+  }
+
+  // 변경 내용을 스테이지에 남긴 채 HEAD만 한 단계 되돌린다
+  async undoLastCommit(): Promise<void> {
+    // 부모 없는 최초 커밋은 되돌릴 대상이 없으므로 거부
+    await this.git.raw(['rev-parse', '--verify', 'HEAD~1']).catch(() => {
+      throw new Error('cannot undo the initial commit (no parent)')
+    })
+    await this.git.raw(['reset', '--soft', 'HEAD~1'])
   }
 
   async createBranch(name: string, checkout: boolean): Promise<void> {
@@ -143,29 +194,50 @@ export class GitService {
     await this.git.branch(['-m', oldName, newName])
   }
 
-  async merge(branch: string): Promise<{ conflicts: boolean }> {
+  // 충돌이 생길 수 있는 명령의 공통 실행기.
+  // 충돌(상태 파일 생성)이면 conflicts로 보고, 그 외 진짜 실패는 재throw.
+  // 예외 없이 끝났어도 한국어 로케일에서는 충돌 시 throw가 없을 수 있어 후검사한다.
+  private async runConflictable(
+    args: string[],
+    stateFile: string
+  ): Promise<{ conflicts: boolean }> {
+    const conflicted = async (): Promise<boolean> => {
+      if (!this.hasGitFile(stateFile)) return false
+      const s = await this.git.status()
+      return s.conflicted.length > 0
+    }
     try {
-      await this.git.merge([branch])
+      await this.git.raw(args)
     } catch (err) {
-      // 충돌(MERGE_HEAD 생성)이면 conflicts로 보고, 그 외 진짜 실패는 재throw
-      const merging = existsSync(join(this.repoPath, '.git', 'MERGE_HEAD'))
-      if (merging) {
-        const s = await this.git.status()
-        if (s.conflicted.length > 0) return { conflicts: true }
-      }
+      if (await conflicted()) return { conflicts: true }
       throw err
     }
-    // 예외 없이 끝났어도 한국어 로케일에서는 충돌 시 throw가 없을 수 있다
-    const merging = existsSync(join(this.repoPath, '.git', 'MERGE_HEAD'))
-    if (merging) {
-      const s = await this.git.status()
-      if (s.conflicted.length > 0) return { conflicts: true }
-    }
+    if (await conflicted()) return { conflicts: true }
     return { conflicts: false }
   }
 
-  async abortMerge(): Promise<void> {
-    await this.git.merge(['--abort'])
+  async merge(branch: string): Promise<{ conflicts: boolean }> {
+    return this.runConflictable(['merge', branch], 'MERGE_HEAD')
+  }
+
+  async cherryPick(hash: string): Promise<{ conflicts: boolean }> {
+    return this.runConflictable(['cherry-pick', hash], 'CHERRY_PICK_HEAD')
+  }
+
+  async revertCommit(hash: string): Promise<{ conflicts: boolean }> {
+    return this.runConflictable(['revert', '--no-edit', hash], 'REVERT_HEAD')
+  }
+
+  // merge/cherry-pick/revert 공통 — 준비된 메시지(.git/MERGE_MSG)로 커밋해 작업을 종결한다.
+  // 단일 커밋 작업이므로 git commit이 상태 파일(CHERRY_PICK_HEAD 등)까지 정리한다.
+  async continueOperation(): Promise<void> {
+    await this.git.raw(['commit', '--no-edit'])
+  }
+
+  async abortOperation(): Promise<void> {
+    if (this.hasGitFile('CHERRY_PICK_HEAD')) await this.git.raw(['cherry-pick', '--abort'])
+    else if (this.hasGitFile('REVERT_HEAD')) await this.git.raw(['revert', '--abort'])
+    else await this.git.merge(['--abort'])
   }
 
   async push(): Promise<void> {
@@ -180,8 +252,11 @@ export class GitService {
     await this.git.fetch(['--all', '--prune'])
   }
 
-  async stashSave(message: string): Promise<void> {
-    await this.git.stash(['push', '-m', message || 'WIP'])
+  // paths를 주면 해당 파일만 스태시한다. -u: untracked 파일 포함
+  async stashSave(message: string, paths?: string[]): Promise<void> {
+    const args = ['push', '-u', '-m', message || 'WIP']
+    if (paths && paths.length > 0) args.push('--', ...paths)
+    await this.git.stash(args)
   }
 
   async stashList(): Promise<StashDto[]> {
@@ -192,8 +267,21 @@ export class GitService {
       .map((line, i) => ({ index: i, message: line.replace(/^stash@\{\d+\}:\s*/, '') }))
   }
 
+  // stash apply/pop은 충돌 시 git이 종료 코드 1을 반환하지만 메시지가 stdout으로
+  // 나가 simple-git이 성공으로 처리한다 → 직접 충돌을 검사해 에러로 승격한다
+  private async stashRun(args: string[]): Promise<void> {
+    await this.git.stash(args)
+    const s = await this.git.status()
+    if (s.conflicted.length > 0) throw new Error(`stash resulted in conflicts: ${args[0]}`)
+  }
+
   async stashApply(index: number): Promise<void> {
-    await this.git.stash(['apply', `stash@{${index}}`])
+    await this.stashRun(['apply', `stash@{${index}}`])
+  }
+
+  // 적용 + 목록에서 제거. 충돌로 실패하면 git이 항목을 보존한다
+  async stashPop(index: number): Promise<void> {
+    await this.stashRun(['pop', `stash@{${index}}`])
   }
 
   async stashDrop(index: number): Promise<void> {

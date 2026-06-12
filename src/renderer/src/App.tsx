@@ -44,10 +44,16 @@ export default function App() {
       if (ui.showSettings || ui.conflictFile !== null || ui.confirm !== null) return
       const el = e.target as HTMLElement | null
       // Ctrl/Cmd+F는 다른 input에 있어도 가로챈다 — 열려 있으면 해제, 아니면 검색 진입
-      // (자체 query input 내부의 Ctrl+F는 stopPropagation으로 여기 오지 않는다)
+      // (자체 query input 내부의 Ctrl(+Shift)+F는 stopPropagation으로 여기 오지 않는다)
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault()
-        if (ui.branchQuery) ui.closeBranchQuery()
+        if (e.shiftKey) {
+          // Ctrl/Cmd+Shift+F: 커밋 검색 토글
+          if (ui.commitQuery) ui.closeCommitSearch()
+          else ui.openCommitSearch()
+        } else if (ui.branchQuery) ui.closeBranchQuery()
+        // 커밋 검색이 열려 있어도 브랜치 검색으로 "전환"한다 (역방향도 동일한 대칭 동작 —
+        // openCommitSearch/startSearch가 상호 배타로 반대쪽을 닫는다)
         else ui.startSearch()
         return
       }
