@@ -22,7 +22,6 @@ export function LeftPanel() {
   const pushToast = useUiStore((s) => s.pushToast)
   const branchQuery = useUiStore((s) => s.branchQuery)
   const setBranchQueryText = useUiStore((s) => s.setBranchQueryText)
-  const startSearch = useUiStore((s) => s.startSearch)
   const closeBranchQuery = useUiStore((s) => s.closeBranchQuery)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [renaming, setRenaming] = useState<{ from: string; value: string } | null>(null)
@@ -125,7 +124,7 @@ export function LeftPanel() {
   }
 
   return (
-    <div className="w-56 shrink-0 overflow-y-auto border-r border-zinc-700 p-2">
+    <div className="h-full w-full overflow-y-auto border-r border-zinc-700 p-2">
       {branchQuery && (
         <div className="mb-2 flex items-center gap-1 rounded bg-zinc-900 px-1.5 py-0.5 ring-1 ring-emerald-500">
           <span className="shrink-0 text-xs text-zinc-500">
@@ -135,15 +134,21 @@ export function LeftPanel() {
             data-branch-query
             autoFocus
             value={branchQuery.text}
-            onChange={(e) => setBranchQueryText(e.target.value)}
+            onChange={(e) =>
+              // 브랜치 이름은 ASCII 기반이므로 한글 입력은 제거한다
+              setBranchQueryText(e.target.value.replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]/g, ''))
+            }
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
                 e.preventDefault()
+                e.stopPropagation()
                 closeBranchQuery()
               }
               if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+                // 인풋이 열린 상태의 Ctrl+F는 토글 해제 (전역 리스너로 전파 차단)
                 e.preventDefault()
-                if (branchQuery.mode === 'filter') startSearch() // 필터 중지 → 검색 전환
+                e.stopPropagation()
+                closeBranchQuery()
               }
             }}
             placeholder={t('branchSearch.placeholder')}

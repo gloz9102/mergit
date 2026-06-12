@@ -11,7 +11,7 @@ export function RightPanel() {
   const hasWip = useRepoStore((s) => (s.status?.files.length ?? 0) > 0)
 
   return (
-    <div className="flex w-80 shrink-0 flex-col overflow-hidden">
+    <div className="flex h-full w-full flex-col overflow-hidden">
       {selected?.type === 'commit' ? (
         <CommitDetail hash={selected.hash} />
       ) : selected?.type === 'wip' && hasWip ? (
