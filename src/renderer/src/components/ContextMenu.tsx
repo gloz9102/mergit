@@ -14,8 +14,13 @@ export function ContextMenu({
   children: ReactNode
 }) {
   useEffect(() => {
-    window.addEventListener('click', onClose)
-    return () => window.removeEventListener('click', onClose)
+    // 클릭으로 메뉴를 여는 경우(툴바 드롭다운 등) 그 클릭이 window까지 버블링되며
+    // 곧바로 닫기로 이어지므로, 리스너 등록을 현재 이벤트 디스패치 이후로 미룬다
+    const id = setTimeout(() => window.addEventListener('click', onClose), 0)
+    return () => {
+      clearTimeout(id)
+      window.removeEventListener('click', onClose)
+    }
   }, [onClose])
 
   // 화면 외곽에서 우클릭해도 메뉴가 뷰포트 밖으로 나가지 않게 클램프
