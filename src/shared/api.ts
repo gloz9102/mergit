@@ -13,7 +13,10 @@ export type Envelope = { ok: true; data: unknown } | { ok: false; error: unknown
 export interface GitApi {
   selectRepo(): Promise<string | null>
   openRepo(path: string): Promise<RepoInfoDto>
-  log(): Promise<CommitDto[]>
+  openRepoWindow(path: string): Promise<void>
+  initialRepoPath(): Promise<string | null>
+  log(skip: number, maxCount: number): Promise<CommitDto[]>
+  searchCommits(text: string): Promise<string[]>
   status(): Promise<StatusDto>
   branches(): Promise<BranchDto[]>
   commitFiles(hash: string): Promise<CommitFileDto[]>
@@ -22,20 +25,25 @@ export interface GitApi {
   stage(paths: string[]): Promise<void>
   unstage(paths: string[]): Promise<void>
   discard(paths: string[]): Promise<void>
-  commit(message: string): Promise<void>
-  commitMerge(): Promise<void>
+  commit(message: string, amend?: boolean): Promise<void>
+  lastCommitMessage(): Promise<string>
+  undoLastCommit(): Promise<void>
   createBranch(name: string, checkout: boolean): Promise<void>
   checkoutBranch(name: string): Promise<void>
   deleteBranch(name: string, force: boolean): Promise<void>
   renameBranch(oldName: string, newName: string): Promise<void>
   merge(branch: string): Promise<{ conflicts: boolean }>
-  abortMerge(): Promise<void>
+  cherryPick(hash: string): Promise<{ conflicts: boolean }>
+  revertCommit(hash: string): Promise<{ conflicts: boolean }>
+  continueOperation(): Promise<void>
+  abortOperation(): Promise<void>
   push(): Promise<void>
   pull(): Promise<void>
   fetch(): Promise<void>
-  stashSave(message: string): Promise<void>
+  stashSave(message: string, paths?: string[]): Promise<void>
   stashList(): Promise<StashDto[]>
   stashApply(index: number): Promise<void>
+  stashPop(index: number): Promise<void>
   stashDrop(index: number): Promise<void>
   readWorkingFile(path: string): Promise<string>
   saveResolved(path: string, content: string): Promise<void>
@@ -46,7 +54,10 @@ export interface GitApi {
 export const GIT_API_METHODS = [
   'selectRepo',
   'openRepo',
+  'openRepoWindow',
+  'initialRepoPath',
   'log',
+  'searchCommits',
   'status',
   'branches',
   'commitFiles',
@@ -56,19 +67,24 @@ export const GIT_API_METHODS = [
   'unstage',
   'discard',
   'commit',
-  'commitMerge',
+  'lastCommitMessage',
+  'undoLastCommit',
   'createBranch',
   'checkoutBranch',
   'deleteBranch',
   'renameBranch',
   'merge',
-  'abortMerge',
+  'cherryPick',
+  'revertCommit',
+  'continueOperation',
+  'abortOperation',
   'push',
   'pull',
   'fetch',
   'stashSave',
   'stashList',
   'stashApply',
+  'stashPop',
   'stashDrop',
   'readWorkingFile',
   'saveResolved'

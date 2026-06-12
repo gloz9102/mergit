@@ -22,6 +22,22 @@ export function makeRepo(): string {
   return dir
 }
 
+// 연속 커밋 c1..cn이 있는 저장소 (페이징 테스트용)
+export function makeRepoWithCommits(n: number): string {
+  const dir = mkdtempSync(join(tmpdir(), 'gkc-'))
+  const git = gitIn(dir)
+  git('init', '-b', 'main')
+  git('config', 'user.email', 'test@test.com')
+  git('config', 'user.name', 'Test')
+  git('config', 'commit.gpgsign', 'false')
+  for (let i = 1; i <= n; i++) {
+    writeFileSync(join(dir, 'a.txt'), `v${i}\n`)
+    git('add', '.')
+    git('commit', '-m', `c${i}`)
+  }
+  return dir
+}
+
 // main과 feature가 같은 줄을 다르게 수정해 머지 시 충돌하는 저장소
 export function makeConflictRepo(): string {
   const dir = makeRepo()
