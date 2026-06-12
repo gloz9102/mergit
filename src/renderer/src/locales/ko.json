@@ -57,6 +57,12 @@
     "drop": "삭제",
     "dropConfirm": "스태시 '{{name}}'을(를) 삭제할까요?"
   },
+  "branchSearch": {
+    "filterLabel": "필터",
+    "searchLabel": "검색",
+    "placeholder": "브랜치 검색...",
+    "noMatch": "일치하는 브랜치가 없습니다"
+  },
   "settings": {
     "title": "설정",
     "language": "언어",

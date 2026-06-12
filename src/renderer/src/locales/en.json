@@ -57,6 +57,12 @@
     "drop": "Drop",
     "dropConfirm": "Drop stash '{{name}}'?"
   },
+  "branchSearch": {
+    "filterLabel": "Filter",
+    "searchLabel": "Search",
+    "placeholder": "Search branches...",
+    "noMatch": "No matching branches"
+  },
   "settings": {
     "title": "Settings",
     "language": "Language",

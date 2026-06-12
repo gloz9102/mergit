@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { BranchDto, GitErrorDto } from '../../../shared/types'
+import { fuzzyMatch } from '../lib/fuzzy'
 import { run, toastError } from '../lib/run'
 import { useRepoStore } from '../stores/repoStore'
 import { useUiStore } from '../stores/uiStore'
@@ -19,6 +20,10 @@ export function LeftPanel() {
   const refresh = useRepoStore((s) => s.refresh)
   const ask = useUiStore((s) => s.ask)
   const pushToast = useUiStore((s) => s.pushToast)
+  const branchQuery = useUiStore((s) => s.branchQuery)
+  const setBranchQueryText = useUiStore((s) => s.setBranchQueryText)
+  const startSearch = useUiStore((s) => s.startSearch)
+  const closeBranchQuery = useUiStore((s) => s.closeBranchQuery)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [renaming, setRenaming] = useState<{ from: string; value: string } | null>(null)
 
@@ -29,8 +34,20 @@ export function LeftPanel() {
     return () => window.removeEventListener('click', close)
   }, [menu])
 
-  const locals = branches.filter((b) => !b.isRemote)
-  const remotes = branches.filter((b) => b.isRemote)
+  // filter 모드: 비매칭 제거 / search 모드 또는 비활성: 전부 표시. 매칭 인덱스는 하이라이트용.
+  const { locals, remotes } = useMemo(() => {
+    const withMatch = (list: BranchDto[]): { branch: BranchDto; indices: number[] }[] =>
+      list
+        .map((b) => ({ branch: b, m: fuzzyMatch(branchQuery?.text ?? '', b.name) }))
+        .filter(({ m }) => branchQuery?.mode !== 'filter' || m.matched)
+        .map(({ branch, m }) => ({ branch, indices: branchQuery ? m.indices : [] }))
+    return {
+      locals: withMatch(branches.filter((b) => !b.isRemote)),
+      remotes: withMatch(branches.filter((b) => b.isRemote))
+    }
+  }, [branches, branchQuery])
+
+  const noMatch = branchQuery?.mode === 'filter' && locals.length + remotes.length === 0
 
   function checkout(branch: BranchDto): void {
     // 원격 브랜치는 프리픽스를 떼고 git의 DWIM 추적 브랜치 생성을 활용
@@ -72,7 +89,7 @@ export function LeftPanel() {
     if (to && to !== from) void run(() => window.api.renameBranch(from, to))
   }
 
-  function branchRow(branch: BranchDto) {
+  function branchRow({ branch, indices }: { branch: BranchDto; indices: number[] }) {
     if (renaming && !branch.isRemote && renaming.from === branch.name) {
       return (
         <input
@@ -102,17 +119,43 @@ export function LeftPanel() {
         }`}
       >
         {branch.current ? '● ' : ''}
-        {branch.name}
+        <Highlight text={branch.name} indices={indices} />
       </button>
     )
   }
 
   return (
     <div className="w-56 shrink-0 overflow-y-auto border-r border-zinc-700 p-2">
+      {branchQuery && (
+        <div className="mb-2 flex items-center gap-1 rounded bg-zinc-900 px-1.5 py-0.5 ring-1 ring-emerald-500">
+          <span className="shrink-0 text-xs text-zinc-500">
+            {t(branchQuery.mode === 'search' ? 'branchSearch.searchLabel' : 'branchSearch.filterLabel')}
+          </span>
+          <input
+            data-branch-query
+            autoFocus
+            value={branchQuery.text}
+            onChange={(e) => setBranchQueryText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                closeBranchQuery()
+              }
+              if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+                e.preventDefault()
+                if (branchQuery.mode === 'filter') startSearch() // 필터 중지 → 검색 전환
+              }
+            }}
+            placeholder={t('branchSearch.placeholder')}
+            className="w-full bg-transparent text-sm outline-none placeholder:text-zinc-600"
+          />
+        </div>
+      )}
       <p className="mb-1 text-xs font-semibold uppercase text-zinc-500">{t('panel.local')}</p>
       {locals.map(branchRow)}
       <p className="mb-1 mt-3 text-xs font-semibold uppercase text-zinc-500">{t('panel.remote')}</p>
       {remotes.map(branchRow)}
+      {noMatch && <p className="mt-2 text-xs text-zinc-500">{t('branchSearch.noMatch')}</p>}
       <p className="mb-1 mt-3 text-xs font-semibold uppercase text-zinc-500">{t('panel.stash')}</p>
       {stashes.map((stash) => (
         <div key={stash.index} className="group flex items-center gap-1 rounded px-1 hover:bg-zinc-800">
@@ -163,6 +206,7 @@ export function LeftPanel() {
               <MenuItem
                 label={t('branch.rename')}
                 onClick={() => {
+                  closeBranchQuery() // rename input과 autoFocus 경쟁 방지
                   setRenaming({ from: menu.branch.name, value: menu.branch.name })
                   setMenu(null)
                 }}
@@ -183,6 +227,25 @@ export function LeftPanel() {
         </div>
       )}
     </div>
+  )
+}
+
+// 매칭 인덱스 위치의 문자를 강조해 브랜치 이름을 렌더
+function Highlight({ text, indices }: { text: string; indices: number[] }) {
+  if (indices.length === 0) return <>{text}</>
+  const set = new Set(indices)
+  return (
+    <>
+      {[...text].map((ch, i) =>
+        set.has(i) ? (
+          <span key={i} className="rounded-sm bg-emerald-500/30 font-semibold text-emerald-300">
+            {ch}
+          </span>
+        ) : (
+          <span key={i}>{ch}</span>
+        )
+      )}
+    </>
   )
 }
 
