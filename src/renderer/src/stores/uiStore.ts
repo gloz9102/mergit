@@ -71,7 +71,12 @@ export const useUiStore = create<UiState>((set) => ({
   // 필터 중이어도 비우고 검색으로 전환 (요구사항: 필터링 중이면 중지)
   startSearch: () => set({ branchQuery: { mode: 'search', text: '' } }),
   setBranchQueryText: (text) =>
-    set((s) => (s.branchQuery ? { branchQuery: { ...s.branchQuery, text } } : {})),
+    set((s) => {
+      if (!s.branchQuery) return {}
+      // 필터 모드에서 문자를 모두 지우면 필터 해제 (검색 모드는 빈 값 허용)
+      if (s.branchQuery.mode === 'filter' && text === '') return { branchQuery: null }
+      return { branchQuery: { ...s.branchQuery, text } }
+    }),
   closeBranchQuery: () => set({ branchQuery: null }),
   openConflict: (conflictFile) => set({ conflictFile }),
   setShowSettings: (showSettings) => set({ showSettings }),
