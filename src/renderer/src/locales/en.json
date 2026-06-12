@@ -83,6 +83,13 @@
     "dropConfirm": "Drop stash '{{name}}'?",
     "messagePlaceholder": "Stash message (optional)"
   },
+  "bookmark": {
+    "header": "Bookmarked Repositories",
+    "empty": "Empty",
+    "toggle": "Bookmark repository",
+    "openNewWindow": "Open in new window",
+    "openCurrentWindow": "Open in this window"
+  },
   "branchSearch": {
     "filterLabel": "Filter",
     "searchLabel": "Search",

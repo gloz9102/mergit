@@ -83,6 +83,13 @@
     "dropConfirm": "스태시 '{{name}}'을(를) 삭제할까요?",
     "messagePlaceholder": "스태시 메시지 (선택)"
   },
+  "bookmark": {
+    "header": "즐겨찾는 저장소",
+    "empty": "비어 있음",
+    "toggle": "저장소 즐겨찾기",
+    "openNewWindow": "새 창으로 열기",
+    "openCurrentWindow": "현재 창으로 열기"
+  },
   "branchSearch": {
     "filterLabel": "필터",
     "searchLabel": "검색",

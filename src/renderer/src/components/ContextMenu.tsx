@@ -45,7 +45,7 @@ export function MenuItem({
   disabled,
   danger
 }: {
-  label: string
+  label: ReactNode
   onClick: () => void
   disabled?: boolean
   danger?: boolean
