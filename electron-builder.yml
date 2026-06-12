@@ -12,6 +12,13 @@ win:
   target:
     - nsis
     - portable
+mac:
+  icon: build/icon-mac.png
+  category: public.app-category.developer-tools
+  # 로컬 사용 목적의 미서명 빌드
+  identity: null
+  target:
+    - dmg
 nsis:
   oneClick: true
   deleteAppDataOnUninstall: true
