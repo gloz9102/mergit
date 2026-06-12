@@ -1,11 +1,14 @@
 import { app, BrowserWindow, Menu } from 'electron'
 import { join } from 'node:path'
+import icon from '../../resources/icon.png?asset'
 import { registerIpc } from './ipc'
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
+    // 창/작업표시줄 아이콘 (Windows·Linux, dev 포함 — macOS는 무시)
+    icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
