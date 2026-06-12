@@ -1,6 +1,7 @@
 {
   "app": {
     "openRepo": "저장소 열기",
+    "openRepoNewWindow": "새 창으로 저장소 열기",
     "noRepo": "git 저장소를 열어 시작하세요",
     "recentRepos": "최근 저장소"
   },

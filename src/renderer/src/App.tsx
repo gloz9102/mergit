@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toastError } from './lib/run'
 import { useRepoStore } from './stores/repoStore'
 import { useUiStore } from './stores/uiStore'
 import { Toolbar } from './components/Toolbar'
@@ -35,6 +36,19 @@ export default function App() {
   const [rightWidth, resizeRight] = usePanelWidth('rightPanelWidth', 320)
 
   useEffect(() => window.api.onRepoChanged(() => void refresh()), [refresh])
+
+  // "새 창으로 저장소 열기"로 만들어진 창이면 예약된 경로를 받아 자동으로 연다
+  useEffect(() => {
+    void window.api
+      .initialRepoPath()
+      .then((path) => (path ? useRepoStore.getState().openRepo(path) : undefined))
+      .catch(toastError)
+  }, [])
+
+  // 창 제목: 저장소가 열려 있으면 "[저장소명] - Mergit"
+  useEffect(() => {
+    document.title = repo ? `${repo.name} - Mergit` : 'Mergit'
+  }, [repo])
 
   // 전역 키 입력: 포커스 없는 타이핑 → 브랜치 필터, Ctrl/Cmd+F → 브랜치 검색
   useEffect(() => {

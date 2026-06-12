@@ -4,6 +4,7 @@ import { addRecentRepo } from '../lib/recentRepos'
 import { run, toastError } from '../lib/run'
 import { useRepoStore } from '../stores/repoStore'
 import { useUiStore } from '../stores/uiStore'
+import { ContextMenu, MenuItem } from './ContextMenu'
 
 function Spinner() {
   return (
@@ -23,15 +24,18 @@ export function Toolbar() {
   const setPending = useUiStore((s) => s.setPending)
   const [branchName, setBranchName] = useState<string | null>(null) // null = 입력창 닫힘
   const [stashMessage, setStashMessage] = useState<string | null>(null) // null = 입력창 닫힘
+  const [openMenu, setOpenMenu] = useState<{ x: number; y: number } | null>(null)
 
   const anyPending = Object.values(pending).some(Boolean)
 
-  async function handleOpen(): Promise<void> {
+  // newWindow=true면 선택한 저장소를 새 창에서 연다
+  async function handleOpen(newWindow: boolean): Promise<void> {
     setPending('open', true)
     try {
       const path = await window.api.selectRepo()
       if (!path) return
-      await openRepo(path)
+      if (newWindow) await window.api.openRepoWindow(path)
+      else await openRepo(path)
       addRecentRepo(path)
     } catch (err) {
       toastError(err)
@@ -59,10 +63,37 @@ export function Toolbar() {
 
   return (
     <div className="flex items-center gap-1 border-b border-zinc-700 bg-zinc-800 px-2 py-1.5">
-      <button className={btn} disabled={!!pending['open']} onClick={() => void handleOpen()}>
-        {pending['open'] && <Spinner />}
-        {t('app.openRepo')}
-      </button>
+      <div className="flex items-center">
+        <button
+          className={`${btn} rounded-r-none`}
+          disabled={!!pending['open']}
+          onClick={() => void handleOpen(false)}
+        >
+          {pending['open'] && <Spinner />}
+          {t('app.openRepo')}
+        </button>
+        <button
+          className={`${btn} rounded-l-none border-l border-zinc-600 px-1.5`}
+          disabled={!!pending['open']}
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect()
+            setOpenMenu({ x: r.left, y: r.bottom + 2 })
+          }}
+        >
+          ▾
+        </button>
+      </div>
+      {openMenu && (
+        <ContextMenu x={openMenu.x} y={openMenu.y} onClose={() => setOpenMenu(null)}>
+          <MenuItem
+            label={t('app.openRepoNewWindow')}
+            onClick={() => {
+              setOpenMenu(null)
+              void handleOpen(true)
+            }}
+          />
+        </ContextMenu>
+      )}
       {repo && <span className="mx-2 text-sm font-semibold text-emerald-400">{repo.name}</span>}
       <button
         className={btn}

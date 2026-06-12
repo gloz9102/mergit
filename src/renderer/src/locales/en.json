@@ -1,6 +1,7 @@
 {
   "app": {
     "openRepo": "Open Repository",
+    "openRepoNewWindow": "Open Repository in New Window",
     "noRepo": "Open a git repository to get started",
     "recentRepos": "Recent repositories"
   },

@@ -13,6 +13,8 @@ export type Envelope = { ok: true; data: unknown } | { ok: false; error: unknown
 export interface GitApi {
   selectRepo(): Promise<string | null>
   openRepo(path: string): Promise<RepoInfoDto>
+  openRepoWindow(path: string): Promise<void>
+  initialRepoPath(): Promise<string | null>
   log(skip: number, maxCount: number): Promise<CommitDto[]>
   searchCommits(text: string): Promise<string[]>
   status(): Promise<StatusDto>
@@ -52,6 +54,8 @@ export interface GitApi {
 export const GIT_API_METHODS = [
   'selectRepo',
   'openRepo',
+  'openRepoWindow',
+  'initialRepoPath',
   'log',
   'searchCommits',
   'status',
