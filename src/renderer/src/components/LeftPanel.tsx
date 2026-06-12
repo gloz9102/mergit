@@ -27,6 +27,25 @@ export function LeftPanel() {
   const closeBranchQuery = useUiStore((s) => s.closeBranchQuery)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [renaming, setRenaming] = useState<{ from: string; value: string } | null>(null)
+  // 섹션(로컬/원격/스태시) 접힘 상태 — localStorage에 보존
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('leftPanelCollapsed') ?? '{}')
+    } catch {
+      return {}
+    }
+  })
+
+  function toggleSection(id: string): void {
+    setCollapsed((c) => {
+      const next = { ...c, [id]: !c[id] }
+      localStorage.setItem('leftPanelCollapsed', JSON.stringify(next))
+      return next
+    })
+  }
+
+  // 검색/필터 중에는 접힘을 무시해 매칭 결과가 항상 보이게 한다
+  const isOpen = (id: string): boolean => !!branchQuery || !collapsed[id]
 
   // filter 모드: 비매칭 제거 / search 모드 또는 비활성: 전부 표시. 매칭 인덱스는 하이라이트용.
   const { locals, remotes } = useMemo(() => {
@@ -36,7 +55,10 @@ export function LeftPanel() {
         .filter(({ m }) => branchQuery?.mode !== 'filter' || m.matched)
         .map(({ branch, m }) => ({ branch, indices: branchQuery ? m.indices : [] }))
     return {
-      locals: withMatch(branches.filter((b) => !b.isRemote)),
+      // 현재 체크아웃된 브랜치를 목록 최상단에 고정 (stable sort라 나머지 순서 유지)
+      locals: withMatch(
+        [...branches.filter((b) => !b.isRemote)].sort((a, b) => Number(b.current) - Number(a.current))
+      ),
       remotes: withMatch(branches.filter((b) => b.isRemote))
     }
   }, [branches, branchQuery])
@@ -151,13 +173,31 @@ export function LeftPanel() {
           />
         </div>
       )}
-      <p className="mb-1 text-xs font-semibold uppercase text-zinc-500">{t('panel.local')}</p>
-      {locals.map(branchRow)}
-      <p className="mb-1 mt-3 text-xs font-semibold uppercase text-zinc-500">{t('panel.remote')}</p>
-      {remotes.map(branchRow)}
+      <SectionHeader
+        title={t('panel.local')}
+        count={locals.length}
+        open={isOpen('local')}
+        onToggle={() => toggleSection('local')}
+      />
+      {isOpen('local') && locals.map(branchRow)}
+      <SectionHeader
+        title={t('panel.remote')}
+        count={remotes.length}
+        open={isOpen('remote')}
+        onToggle={() => toggleSection('remote')}
+        topGap
+      />
+      {isOpen('remote') && remotes.map(branchRow)}
       {noMatch && <p className="mt-2 text-xs text-zinc-500">{t('branchSearch.noMatch')}</p>}
-      <p className="mb-1 mt-3 text-xs font-semibold uppercase text-zinc-500">{t('panel.stash')}</p>
-      {stashes.map((stash) => (
+      <SectionHeader
+        title={t('panel.stash')}
+        count={stashes.length}
+        open={isOpen('stash')}
+        onToggle={() => toggleSection('stash')}
+        topGap
+      />
+      {isOpen('stash') &&
+        stashes.map((stash) => (
         <div key={stash.index} className="group flex items-center gap-1 rounded px-1 hover:bg-zinc-800">
           <span className="min-w-0 flex-1 truncate text-sm">{stash.message}</span>
           <button
@@ -229,5 +269,32 @@ export function LeftPanel() {
         </ContextMenu>
       )}
     </div>
+  )
+}
+
+// 접을 수 있는 섹션 헤더 — 체브론과 항목 수를 함께 표시
+function SectionHeader({
+  title,
+  count,
+  open,
+  onToggle,
+  topGap
+}: {
+  title: string
+  count: number
+  open: boolean
+  onToggle: () => void
+  topGap?: boolean
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      className={`mb-1 flex w-full items-center gap-1 text-xs font-semibold uppercase text-zinc-500 hover:text-zinc-300 ${
+        topGap ? 'mt-3' : ''
+      }`}
+    >
+      <span className="w-3 shrink-0">{open ? '▾' : '▸'}</span>
+      {title} ({count})
+    </button>
   )
 }
