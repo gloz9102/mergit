@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import i18n from './i18n'
 import { toastError } from './lib/run'
 import { useRepoStore } from './stores/repoStore'
 import { useUiStore } from './stores/uiStore'
@@ -43,6 +44,26 @@ export default function App() {
       .initialRepoPath()
       .then((path) => (path ? useRepoStore.getState().openRepo(path) : undefined))
       .catch(toastError)
+  }, [])
+
+  // 앱 버전 적재 + 시작 시 1회 업데이트 체크 (자동 체크는 실패해도 조용히)
+  useEffect(() => {
+    void window.api
+      .getAppVersion()
+      .then((v) => useUiStore.getState().setAppVersion(v))
+      .catch(() => {})
+    void window.api
+      .checkForUpdates()
+      .then((r) => {
+        if (!r.hasUpdate) return
+        const ui = useUiStore.getState()
+        if (ui.confirm) return // 이미 다이얼로그가 열려 있으면 중복 알림 방지
+        ui.ask(
+          i18n.t('update.available', { current: r.currentVersion, latest: r.latestVersion }),
+          () => void window.api.openExternal(r.releaseUrl).catch(toastError)
+        )
+      })
+      .catch(() => {})
   }, [])
 
   // 창 제목: 저장소가 열려 있으면 "[저장소명] - Mergit"

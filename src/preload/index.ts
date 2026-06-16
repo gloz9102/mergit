@@ -17,4 +17,11 @@ api['onRepoChanged'] = (cb: () => void) => {
   return () => ipcRenderer.removeListener('repo-changed', listener)
 }
 
+// app:* 채널 — GIT_API_METHODS 자동 매핑이 아니라 수동 노출
+api['getAppVersion'] = () => ipcRenderer.invoke('app:getAppVersion').then((res: Envelope) => unwrap(res))
+api['checkForUpdates'] = () =>
+  ipcRenderer.invoke('app:checkForUpdates').then((res: Envelope) => unwrap(res))
+api['openExternal'] = (url: string) =>
+  ipcRenderer.invoke('app:openExternal', url).then((res: Envelope) => unwrap(res))
+
 contextBridge.exposeInMainWorld('api', api)

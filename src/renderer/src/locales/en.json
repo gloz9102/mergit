@@ -101,6 +101,14 @@
     "language": "Language",
     "close": "Close"
   },
+  "update": {
+    "version": "Version",
+    "check": "Check for updates",
+    "checking": "Checking...",
+    "available": "A new version v{{latest}} is available. (current v{{current}}) Open the release page?",
+    "upToDate": "You're on the latest version",
+    "unknownVersion": "Version unavailable"
+  },
   "common": {
     "confirm": "Confirm",
     "cancel": "Cancel",
@@ -114,7 +122,8 @@
     "AUTH": "Authentication failed. Check your system git credential helper / SSH keys",
     "NOT_A_REPO": "Not a git repository",
     "REMOTE": "Remote operation failed",
-    "NO_REPO": "No repository is open"
+    "NO_REPO": "No repository is open",
+    "UPDATE_FAILED": "Failed to check for updates"
   },
   "toast": {
     "pulled": "Pull complete",
