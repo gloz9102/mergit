@@ -101,6 +101,14 @@
     "language": "언어",
     "close": "닫기"
   },
+  "update": {
+    "version": "버전",
+    "check": "업데이트 확인",
+    "checking": "확인 중...",
+    "available": "새 버전 v{{latest}}이(가) 있습니다. (현재 v{{current}}) 릴리스 페이지를 여시겠습니까?",
+    "upToDate": "최신 버전입니다",
+    "unknownVersion": "버전 정보를 불러올 수 없습니다"
+  },
   "common": {
     "confirm": "확인",
     "cancel": "취소",
@@ -114,7 +122,8 @@
     "AUTH": "인증에 실패했습니다. 시스템 git 설정(credential helper / SSH 키)을 확인하세요",
     "NOT_A_REPO": "git 저장소가 아닙니다",
     "REMOTE": "원격 저장소 작업에 실패했습니다",
-    "NO_REPO": "저장소가 열려 있지 않습니다"
+    "NO_REPO": "저장소가 열려 있지 않습니다",
+    "UPDATE_FAILED": "업데이트 확인에 실패했습니다"
   },
   "toast": {
     "pulled": "Pull 완료",

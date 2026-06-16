@@ -38,6 +38,7 @@ interface UiState {
   confirm: ConfirmState | null
   // 진행 중인 git 작업 키 (예: 'pull') — 버튼 스피너/비활성화에 사용
   pending: Record<string, boolean>
+  appVersion: string
   diffView: DiffView | null
   branchQuery: BranchQuery | null
   commitQuery: CommitQuery | null
@@ -57,6 +58,7 @@ interface UiState {
   ask(message: string, onConfirm: () => void): void
   closeConfirm(): void
   setPending(key: string, value: boolean): void
+  setAppVersion(version: string): void
 }
 
 let toastId = 0
@@ -68,6 +70,7 @@ export const useUiStore = create<UiState>((set) => ({
   toasts: [],
   confirm: null,
   pending: {},
+  appVersion: '',
   diffView: null,
 
   branchQuery: null,
@@ -106,5 +109,6 @@ export const useUiStore = create<UiState>((set) => ({
   ask: (message, onConfirm) => set({ confirm: { message, onConfirm } }),
   closeConfirm: () => set({ confirm: null }),
 
-  setPending: (key, value) => set((s) => ({ pending: { ...s.pending, [key]: value } }))
+  setPending: (key, value) => set((s) => ({ pending: { ...s.pending, [key]: value } })),
+  setAppVersion: (appVersion) => set({ appVersion })
 }))
