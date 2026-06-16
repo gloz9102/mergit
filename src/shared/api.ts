@@ -2,6 +2,7 @@ import type {
   BranchDto,
   CommitDto,
   CommitFileDto,
+  HistoryOptions,
   RepoInfoDto,
   StashDto,
   StatusDto
@@ -23,8 +24,8 @@ export interface GitApi {
   openRepo(path: string): Promise<RepoInfoDto>
   openRepoWindow(path: string): Promise<void>
   initialRepoPath(): Promise<string | null>
-  log(skip: number, maxCount: number): Promise<CommitDto[]>
-  searchCommits(text: string): Promise<string[]>
+  log(skip: number, maxCount: number, options?: HistoryOptions): Promise<CommitDto[]>
+  searchCommits(text: string, options?: HistoryOptions): Promise<string[]>
   status(): Promise<StatusDto>
   branches(): Promise<BranchDto[]>
   commitFiles(hash: string): Promise<CommitFileDto[]>

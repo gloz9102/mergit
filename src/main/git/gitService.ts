@@ -7,12 +7,18 @@ import type {
   BranchDto,
   CommitDto,
   CommitFileDto,
+  HistoryOptions,
   RepoInfoDto,
   StashDto,
   StatusDto
 } from '../../shared/types'
 
 export const MAX_UNTRACKED_DIFF_BYTES = 512 * 1024
+
+const DEFAULT_HISTORY_OPTIONS: HistoryOptions = {
+  order: 'date-order',
+  all: true
+}
 
 export class GitService {
   private git: SimpleGit
@@ -32,13 +38,14 @@ export class GitService {
     return existsSync(join(this.repoPath, '.git', name))
   }
 
-  async log(skip: number, maxCount: number): Promise<CommitDto[]> {
-    const head = await this.git.raw(['rev-list', '-n', '1', '--all']).catch(() => '')
+  async log(skip: number, maxCount: number, options: HistoryOptions = DEFAULT_HISTORY_OPTIONS): Promise<CommitDto[]> {
+    const scopeArgs = options.all ? ['--all'] : ['HEAD']
+    const head = await this.git.raw(['rev-list', '-n', '1', ...scopeArgs]).catch(() => '')
     if (!head.trim()) return [] // 커밋 0개인 저장소
     const raw = await this.git.raw([
       'log',
-      '--all',
-      '--date-order',
+      ...scopeArgs,
+      `--${options.order}`,
       `--skip=${skip}`,
       `--max-count=${maxCount}`,
       `--format=${LOG_FORMAT}`
@@ -49,13 +56,14 @@ export class GitService {
   // 메시지 또는 작성자가 text와 부분 일치(대소문자 무시)하는 커밋 해시 목록.
   // --grep과 --author를 한 호출에 넣으면 AND가 되므로 따로 실행해 합집합(OR)을 만든다.
   // -F: 사용자가 입력한 '.', '[' 등을 정규식이 아닌 리터럴로 취급
-  async searchCommits(text: string): Promise<string[]> {
+  async searchCommits(text: string, options: HistoryOptions = DEFAULT_HISTORY_OPTIONS): Promise<string[]> {
     if (!text) return []
-    const head = await this.git.raw(['rev-list', '-n', '1', '--all']).catch(() => '')
+    const scopeArgs = options.all ? ['--all'] : ['HEAD']
+    const head = await this.git.raw(['rev-list', '-n', '1', ...scopeArgs]).catch(() => '')
     if (!head.trim()) return []
     const [byMessage, byAuthor] = await Promise.all([
-      this.git.raw(['log', '--all', '-i', '-F', `--grep=${text}`, '--format=%H']),
-      this.git.raw(['log', '--all', '-i', '-F', `--author=${text}`, '--format=%H'])
+      this.git.raw(['log', ...scopeArgs, '-i', '-F', `--grep=${text}`, '--format=%H']),
+      this.git.raw(['log', ...scopeArgs, '-i', '-F', `--author=${text}`, '--format=%H'])
     ])
     const seen = new Set<string>()
     for (const line of `${byMessage}\n${byAuthor}`.split('\n')) {

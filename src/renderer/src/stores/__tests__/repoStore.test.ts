@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StatusDto } from '../../../../shared/types'
-import { useRepoStore } from '../repoStore'
+import { DEFAULT_HISTORY_OPTIONS, useRepoStore } from '../repoStore'
 
 const status: StatusDto = {
   current: 'main',
@@ -33,6 +33,7 @@ describe('repoStore.refresh', () => {
       status: null,
       stashes: [],
       historyVersion: 0,
+      historyOptions: DEFAULT_HISTORY_OPTIONS,
       hasMoreCommits: true,
       loadingMore: false
     })
@@ -56,6 +57,7 @@ describe('repoStore.refresh', () => {
     await useRepoStore.getState().refresh()
 
     expect(api.log).toHaveBeenCalledTimes(1)
+    expect(api.log).toHaveBeenCalledWith(0, 500, DEFAULT_HISTORY_OPTIONS)
     expect(api.branches).toHaveBeenCalledTimes(1)
     expect(api.status).toHaveBeenCalledTimes(1)
     expect(api.stashList).toHaveBeenCalledTimes(1)
@@ -87,5 +89,31 @@ describe('repoStore.refresh', () => {
     await Promise.all([first, second])
 
     expect(api.status).toHaveBeenCalledTimes(1)
+  })
+
+  it('history 옵션 변경은 커밋 목록을 비우고 새 옵션으로 history만 다시 읽는다', async () => {
+    const api = installApi()
+
+    await useRepoStore.getState().setHistoryOptions({ order: 'date-order', all: true })
+
+    expect(api.log).toHaveBeenCalledTimes(1)
+    expect(api.log).toHaveBeenCalledWith(0, 500, { order: 'date-order', all: true })
+    expect(api.branches).not.toHaveBeenCalled()
+    expect(api.status).not.toHaveBeenCalled()
+    expect(api.stashList).not.toHaveBeenCalled()
+    expect(useRepoStore.getState().historyOptions).toEqual({ order: 'date-order', all: true })
+    expect(useRepoStore.getState().historyVersion).toBe(1)
+  })
+
+  it('loadMore는 현재 history 옵션으로 다음 페이지를 읽는다', async () => {
+    const api = installApi()
+    useRepoStore.setState({
+      commits: [{ hash: 'a', parents: [], author: 'A', email: 'a@test.com', date: '', subject: 'a', refs: [] }],
+      historyOptions: { order: 'date-order', all: true }
+    })
+
+    await useRepoStore.getState().loadMore()
+
+    expect(api.log).toHaveBeenCalledWith(1, 500, { order: 'date-order', all: true })
   })
 })

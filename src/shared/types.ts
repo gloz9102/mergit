@@ -13,6 +13,13 @@ export interface CommitDto {
   refs: string[] // 예: ["HEAD -> main", "origin/main"]
 }
 
+export type HistoryOrder = 'topo-order' | 'date-order'
+
+export interface HistoryOptions {
+  order: HistoryOrder
+  all: boolean
+}
+
 export interface BranchDto {
   name: string // 로컬: "main", 원격: "origin/main"
   isRemote: boolean

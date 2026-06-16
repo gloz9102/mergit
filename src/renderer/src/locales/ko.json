@@ -58,6 +58,13 @@
     "noMatch": "일치하는 커밋이 없습니다",
     "searching": "검색 중..."
   },
+  "history": {
+    "title": "히스토리",
+    "orderLabel": "커밋 정렬",
+    "topo-order": "topo-order",
+    "date-order": "date-order",
+    "all": "--all"
+  },
   "merge": {
     "inProgress": "머지 진행 중",
     "cherryPickInProgress": "체리픽 진행 중",

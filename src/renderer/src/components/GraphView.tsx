@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { assignLanes } from '../../../shared/lanes'
-import type { CommitDto } from '../../../shared/types'
+import type { CommitDto, HistoryOrder } from '../../../shared/types'
 import { substringMatch } from '../lib/fuzzy'
 import { buildGraphEdgeIndex, visibleGraphEdges } from '../lib/graphEdges'
 import { run, toastError } from '../lib/run'
@@ -33,6 +33,8 @@ export function GraphView() {
   const commits = useRepoStore((s) => s.commits)
   const repoPath = useRepoStore((s) => s.repo?.path ?? null)
   const historyVersion = useRepoStore((s) => s.historyVersion)
+  const historyOptions = useRepoStore((s) => s.historyOptions)
+  const setHistoryOptions = useRepoStore((s) => s.setHistoryOptions)
   const status = useRepoStore((s) => s.status)
   const hasMoreCommits = useRepoStore((s) => s.hasMoreCommits)
   const loadingMore = useRepoStore((s) => s.loadingMore)
@@ -92,7 +94,7 @@ export function GraphView() {
     }
   }, [rows.length, viewH, hasMoreCommits, loadingMore, loadMore])
 
-  // ── 커밋 검색: 300ms 디바운스 후 전체 히스토리에서 매칭 해시 집합을 받는다 ──
+  // ── 커밋 검색: 300ms 디바운스 후 현재 히스토리 옵션 범위에서 매칭 해시 집합을 받는다 ──
   const [matches, setMatches] = useState<Set<string>>(new Set())
   const [searching, setSearching] = useState(false)
   const [currentMatch, setCurrentMatch] = useState<string | null>(null)
@@ -104,7 +106,7 @@ export function GraphView() {
       setSearching(false)
       return
     }
-    const cacheKey = `${repoPath}\x00${historyVersion}\x00${queryText}`
+    const cacheKey = `${repoPath}\x00${historyVersion}\x00${historyOptions.order}\x00${historyOptions.all ? 'all' : 'current'}\x00${queryText}`
     const cached = commitSearchCache.get(cacheKey)
     if (cached) {
       setMatches(new Set(cached))
@@ -114,7 +116,7 @@ export function GraphView() {
     const timer = setTimeout(() => {
       setSearching(true)
       window.api
-        .searchCommits(queryText)
+        .searchCommits(queryText, historyOptions)
         .then((hashes) => {
           if (requestId !== commitSearchRequestId) return
           if (commitSearchCache.size >= COMMIT_SEARCH_CACHE_LIMIT) {
@@ -132,10 +134,14 @@ export function GraphView() {
         })
     }, 300)
     return () => clearTimeout(timer)
-  }, [queryText, repoPath, historyVersion])
+  }, [queryText, repoPath, historyVersion, historyOptions])
 
-  // 다음/이전 매칭으로 점프. 로드 범위에 다음 매칭이 없으면 나타날 때까지 더 불러온다
-  // (검색 결과는 전체 히스토리 기준이므로 hasMore가 남아 있는 한 반드시 도달한다)
+  function changeHistoryOrder(order: HistoryOrder): void {
+    setHistoryOptions({ order }).catch(toastError)
+  }
+
+  // 다음/이전 매칭으로 점프. 로드 범위에 다음 매칭이 없으면 나타날 때까지 더 불러온다.
+  // 검색 결과와 페이지 로딩은 같은 히스토리 옵션을 공유한다.
   async function jump(dir: 1 | -1): Promise<void> {
     if (matches.size === 0 || jumping.current) return
     jumping.current = true
@@ -240,9 +246,43 @@ export function GraphView() {
   const contentH = (rows.length + (loadingMore ? 1 : 0)) * ROW_H
 
   return (
-    <div className="relative min-w-0 flex-1 border-r border-zinc-700">
+    <div className="relative flex min-w-0 flex-1 flex-col border-r border-zinc-700">
+      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-zinc-700 bg-zinc-900 px-3">
+        <span className="shrink-0 text-xs font-semibold uppercase text-zinc-500">
+          {t('history.title')}
+        </span>
+        <div
+          className="ml-auto flex min-w-0 items-center overflow-hidden rounded border border-zinc-700"
+          aria-label={t('history.orderLabel')}
+        >
+          {(['topo-order', 'date-order'] as const).map((order) => (
+            <button
+              key={order}
+              type="button"
+              onClick={() => changeHistoryOrder(order)}
+              aria-pressed={historyOptions.order === order}
+              className={`px-2 py-1 text-xs ${
+                historyOptions.order === order
+                  ? 'bg-emerald-700 text-white'
+                  : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100'
+              }`}
+            >
+              {t(`history.${order}`)}
+            </button>
+          ))}
+        </div>
+        <label className="flex shrink-0 items-center gap-1.5 text-xs text-zinc-400">
+          <input
+            type="checkbox"
+            checked={historyOptions.all}
+            onChange={(e) => setHistoryOptions({ all: e.target.checked }).catch(toastError)}
+            className="h-3.5 w-3.5 accent-emerald-600"
+          />
+          <span>{t('history.all')}</span>
+        </label>
+      </div>
       {commitQuery && (
-        <div className="absolute left-2 right-2 top-2 z-10 flex items-center gap-2 rounded bg-zinc-900/95 px-2 py-1 ring-1 ring-emerald-500">
+        <div className="absolute left-2 right-2 top-12 z-10 flex items-center gap-2 rounded bg-zinc-900/95 px-2 py-1 ring-1 ring-emerald-500">
           <span className="shrink-0 text-xs text-zinc-500">{t('commitSearch.label')}</span>
           <input
             data-commit-query
@@ -291,7 +331,7 @@ export function GraphView() {
             loadMore().catch(toastError)
           }
         }}
-        className="h-full overflow-y-auto"
+        className="min-h-0 flex-1 overflow-y-auto"
       >
         <div className="relative" style={{ height: contentH }}>
           <svg

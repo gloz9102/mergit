@@ -29,6 +29,23 @@ describe('GitService', () => {
     expect(pages.map((c) => c.hash)).toEqual(all.map((c) => c.hash))
   })
 
+  it('log 옵션: --all을 끄면 현재 브랜치 범위만 반환한다', async () => {
+    const dir = makeRepo()
+    const git = gitIn(dir)
+    git('checkout', '-b', 'feature')
+    writeFileSync(join(dir, 'feature.txt'), 'feature\n')
+    git('add', '.')
+    git('commit', '-m', 'feature only')
+    git('checkout', 'main')
+    const svc = new GitService(dir)
+
+    const currentOnly = await svc.log(0, 100, { order: 'topo-order', all: false })
+    const allBranches = await svc.log(0, 100, { order: 'topo-order', all: true })
+
+    expect(currentOnly.map((c) => c.subject)).toEqual(['initial'])
+    expect(allBranches.map((c) => c.subject)).toContain('feature only')
+  })
+
   it('searchCommits: 메시지를 대소문자 무시 부분 일치로 찾는다', async () => {
     const dir = makeRepo()
     const svc = new GitService(dir)
@@ -56,6 +73,20 @@ describe('GitService', () => {
     const dir = makeRepo()
     const svc = new GitService(dir)
     expect(await svc.searchCommits('')).toEqual([])
+  })
+
+  it('searchCommits 옵션: --all을 끄면 현재 브랜치 범위에서만 찾는다', async () => {
+    const dir = makeRepo()
+    const git = gitIn(dir)
+    git('checkout', '-b', 'feature')
+    writeFileSync(join(dir, 'feature.txt'), 'feature\n')
+    git('add', '.')
+    git('commit', '-m', 'hidden feature')
+    git('checkout', 'main')
+    const svc = new GitService(dir)
+
+    expect(await svc.searchCommits('hidden', { order: 'topo-order', all: false })).toEqual([])
+    expect(await svc.searchCommits('hidden', { order: 'topo-order', all: true })).toHaveLength(1)
   })
 
   it('status: 수정 파일과 staged 파일을 구분한다', async () => {

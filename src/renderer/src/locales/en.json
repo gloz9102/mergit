@@ -58,6 +58,13 @@
     "noMatch": "No matching commits",
     "searching": "Searching..."
   },
+  "history": {
+    "title": "History",
+    "orderLabel": "Commit order",
+    "topo-order": "topo-order",
+    "date-order": "date-order",
+    "all": "--all"
+  },
   "merge": {
     "inProgress": "Merge in progress",
     "cherryPickInProgress": "Cherry-pick in progress",
