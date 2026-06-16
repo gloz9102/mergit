@@ -1,5 +1,5 @@
 import i18n from '../i18n'
-import { useRepoStore } from '../stores/repoStore'
+import { useRepoStore, type RefreshScope } from '../stores/repoStore'
 import { useUiStore } from '../stores/uiStore'
 import type { GitErrorDto } from '../../../shared/types'
 
@@ -15,7 +15,8 @@ export function toastError(err: unknown): void {
 export async function run(
   action: () => Promise<void>,
   successKey?: string,
-  busyKey?: string
+  busyKey?: string,
+  refreshScope?: RefreshScope
 ): Promise<void> {
   if (busyKey) useUiStore.getState().setPending(busyKey, true)
   try {
@@ -25,7 +26,7 @@ export async function run(
     toastError(err)
   } finally {
     // refresh까지 끝나야 화면이 최신이므로 그 뒤에 진행 표시를 끈다
-    await useRepoStore.getState().refresh().catch(() => {})
+    await useRepoStore.getState().refresh(refreshScope).catch(() => {})
     if (busyKey) useUiStore.getState().setPending(busyKey, false)
   }
 }

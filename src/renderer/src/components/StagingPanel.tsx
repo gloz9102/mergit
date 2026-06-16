@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { FileStatusDto } from '../../../shared/types'
 import { splitPath } from '../lib/paths'
@@ -18,23 +18,30 @@ export function StagingPanel() {
   // amend 체크 전에 작성하던 메시지 — 체크 해제 시 복원
   const savedMessage = useRef('')
 
-  if (!status) return null
-  const canAmend = commits.length > 0 && status.operation === null
   // 충돌 파일은 MergeBanner/ConflictEditor가 담당
-  const staged = status.files.filter((f) => !f.isConflicted && f.index !== ' ' && f.index !== '?')
-  const unstaged = status.files.filter(
-    (f) => !f.isConflicted && f.workingDir !== ' ' && f.workingDir !== ''
+  const files = status?.files ?? []
+  const staged = useMemo(
+    () => files.filter((f) => !f.isConflicted && f.index !== ' ' && f.index !== '?'),
+    [files]
+  )
+  const unstaged = useMemo(
+    () => files.filter((f) => !f.isConflicted && f.workingDir !== ' ' && f.workingDir !== ''),
+    [files]
   )
 
   // diff는 중앙 영역(DiffPanel)에 크게 표시한다
-  async function showDiff(file: FileStatusDto, fromStaged: boolean): Promise<void> {
+  const showDiff = useCallback(async (file: FileStatusDto, fromStaged: boolean): Promise<void> => {
     try {
       const text = await window.api.diffWorkingFile(file.path, fromStaged)
       openDiff({ title: file.path, text })
     } catch (err) {
       toastError(err)
     }
-  }
+  }, [openDiff])
+  const clearDiff = useCallback(() => openDiff(null), [openDiff])
+
+  if (!status) return null
+  const canAmend = commits.length > 0 && status.operation === null
 
   function commit(): void {
     const msg = message.trim()
@@ -73,81 +80,30 @@ export function StagingPanel() {
     }
   }
 
-  function fileRow(file: FileStatusDto, fromStaged: boolean) {
-    const { dir, base } = splitPath(file.path)
-    return (
-      <div key={file.path} className="group flex items-center gap-1 rounded px-1 hover:bg-zinc-800">
-        <button
-          title={file.path}
-          onClick={() => void showDiff(file, fromStaged)}
-          className={`flex min-w-0 flex-1 items-baseline gap-1.5 rounded text-left font-mono text-xs ${
-            diffView?.title === file.path ? 'bg-zinc-700' : ''
-          }`}
-        >
-          <span className="shrink-0 text-amber-400">
-            {fromStaged ? file.index : file.workingDir}
-          </span>
-          <span className="shrink-0 truncate text-zinc-200">{base}</span>
-          <span className="min-w-0 truncate text-[11px] text-zinc-500">{dir}</span>
-        </button>
-        {fromStaged ? (
-          <button
-            onClick={() => {
-              openDiff(null)
-              void run(() => window.api.unstage([file.path]))
-            }}
-            className="hidden rounded px-1 text-xs text-zinc-400 hover:text-zinc-200 group-hover:block"
-          >
-            {t('panel.unstage')}
-          </button>
-        ) : (
-          <>
-            <button
-              onClick={() => {
-                openDiff(null)
-                void run(() => window.api.stage([file.path]))
-              }}
-              className="hidden rounded px-1 text-xs text-emerald-400 hover:text-emerald-300 group-hover:block"
-            >
-              {t('panel.stage')}
-            </button>
-            <button
-              onClick={() => {
-                openDiff(null)
-                // 이 파일만 스태시 — 메시지를 경로로 지정해 목록에서 식별
-                void run(() => window.api.stashSave(file.path, [file.path]), 'toast.stashSaved', 'stash')
-              }}
-              className="hidden rounded px-1 text-xs text-zinc-400 hover:text-zinc-200 group-hover:block"
-            >
-              {t('panel.stashFile')}
-            </button>
-            <button
-              onClick={() =>
-                ask(t('common.discardConfirm', { name: file.path }), () => {
-                  openDiff(null)
-                  void run(() => window.api.discard([file.path]))
-                })
-              }
-              className="hidden rounded px-1 text-xs text-red-400 hover:text-red-300 group-hover:block"
-            >
-              {t('panel.discard')}
-            </button>
-          </>
-        )}
-      </div>
-    )
-  }
-
   return (
     <div className="flex h-full flex-col gap-2 p-3 text-sm">
       <p className="text-xs uppercase text-zinc-500">
         {t('panel.unstaged')} ({unstaged.length})
       </p>
-      <div className="min-h-0 flex-1 overflow-y-auto">{unstaged.map((f) => fileRow(f, false))}</div>
+      <FileList
+        files={unstaged}
+        fromStaged={false}
+        activeDiffTitle={diffView?.title ?? null}
+        onShowDiff={showDiff}
+        onClearDiff={clearDiff}
+        onAsk={ask}
+      />
       <p className="text-xs uppercase text-zinc-500">
         {t('panel.staged')} ({staged.length})
       </p>
-      <div className="min-h-0 flex-1 overflow-y-auto">{staged.map((f) => fileRow(f, true))}</div>
+      <FileList
+        files={staged}
+        fromStaged
+        activeDiffTitle={diffView?.title ?? null}
+        onShowDiff={showDiff}
+        onClearDiff={clearDiff}
+        onAsk={ask}
+      />
       <label
         className={`flex items-center gap-1.5 text-xs ${canAmend ? 'text-zinc-400' : 'text-zinc-600'}`}
       >
@@ -177,3 +133,91 @@ export function StagingPanel() {
     </div>
   )
 }
+
+const FileList = memo(function FileList({
+  files,
+  fromStaged,
+  activeDiffTitle,
+  onShowDiff,
+  onClearDiff,
+  onAsk
+}: {
+  files: FileStatusDto[]
+  fromStaged: boolean
+  activeDiffTitle: string | null
+  onShowDiff: (file: FileStatusDto, fromStaged: boolean) => Promise<void>
+  onClearDiff: () => void
+  onAsk: (message: string, onConfirm: () => void) => void
+}) {
+  const { t } = useTranslation()
+
+  function fileRow(file: FileStatusDto) {
+    const { dir, base } = splitPath(file.path)
+    return (
+      <div key={file.path} className="group flex items-center gap-1 rounded px-1 hover:bg-zinc-800">
+        <button
+          title={file.path}
+          onClick={() => void onShowDiff(file, fromStaged)}
+          className={`flex min-w-0 flex-1 items-baseline gap-1.5 rounded text-left font-mono text-xs ${
+            activeDiffTitle === file.path ? 'bg-zinc-700' : ''
+          }`}
+        >
+          <span className="shrink-0 text-amber-400">
+            {fromStaged ? file.index : file.workingDir}
+          </span>
+          <span className="shrink-0 truncate text-zinc-200">{base}</span>
+          <span className="min-w-0 truncate text-[11px] text-zinc-500">{dir}</span>
+        </button>
+        {fromStaged ? (
+          <button
+            onClick={() => {
+              onClearDiff()
+              void run(() => window.api.unstage([file.path]), undefined, undefined, { status: true })
+            }}
+            className="hidden rounded px-1 text-xs text-zinc-400 hover:text-zinc-200 group-hover:block"
+          >
+            {t('panel.unstage')}
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={() => {
+                onClearDiff()
+                void run(() => window.api.stage([file.path]), undefined, undefined, { status: true })
+              }}
+              className="hidden rounded px-1 text-xs text-emerald-400 hover:text-emerald-300 group-hover:block"
+            >
+              {t('panel.stage')}
+            </button>
+            <button
+              onClick={() => {
+                onClearDiff()
+                // 이 파일만 스태시 — 메시지를 경로로 지정해 목록에서 식별
+                void run(() => window.api.stashSave(file.path, [file.path]), 'toast.stashSaved', 'stash', {
+                  status: true,
+                  stashes: true
+                })
+              }}
+              className="hidden rounded px-1 text-xs text-zinc-400 hover:text-zinc-200 group-hover:block"
+            >
+              {t('panel.stashFile')}
+            </button>
+            <button
+              onClick={() =>
+                onAsk(t('common.discardConfirm', { name: file.path }), () => {
+                  onClearDiff()
+                  void run(() => window.api.discard([file.path]), undefined, undefined, { status: true })
+                })
+              }
+              className="hidden rounded px-1 text-xs text-red-400 hover:text-red-300 group-hover:block"
+            >
+              {t('panel.discard')}
+            </button>
+          </>
+        )}
+      </div>
+    )
+  }
+
+  return <div className="min-h-0 flex-1 overflow-y-auto">{files.map(fileRow)}</div>
+})

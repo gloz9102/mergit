@@ -77,7 +77,7 @@ export function Toolbar() {
     const msg = stashMessage?.trim() ?? ''
     setStashMessage(null)
     // 빈 메시지는 서비스가 'WIP'로 처리한다
-    void run(() => window.api.stashSave(msg), 'toast.stashSaved', 'stash')
+    void run(() => window.api.stashSave(msg), 'toast.stashSaved', 'stash', { status: true, stashes: true })
   }
 
   const btn =

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { assignLanes } from '../../../shared/lanes'
 import type { CommitDto } from '../../../shared/types'
 import { substringMatch } from '../lib/fuzzy'
+import { buildGraphEdgeIndex, visibleGraphEdges } from '../lib/graphEdges'
 import { run, toastError } from '../lib/run'
 import { useRepoStore } from '../stores/repoStore'
 import { useUiStore } from '../stores/uiStore'
@@ -13,7 +14,11 @@ const ROW_H = 28
 const LANE_W = 14
 const GRAPH_PAD = 8
 const OVERSCAN = 10
+const EDGE_BUCKET_SIZE = 64
 const LANE_COLORS = ['#34d399', '#60a5fa', '#f472b6', '#fbbf24', '#a78bfa', '#f87171', '#2dd4bf']
+const COMMIT_SEARCH_CACHE_LIMIT = 20
+const commitSearchCache = new Map<string, string[]>()
+let commitSearchRequestId = 0
 
 type Row = { type: 'wip' } | { type: 'commit'; commit: CommitDto }
 
@@ -26,6 +31,8 @@ interface MenuState {
 export function GraphView() {
   const { t } = useTranslation()
   const commits = useRepoStore((s) => s.commits)
+  const repoPath = useRepoStore((s) => s.repo?.path ?? null)
+  const historyVersion = useRepoStore((s) => s.historyVersion)
   const status = useRepoStore((s) => s.status)
   const hasMoreCommits = useRepoStore((s) => s.hasMoreCommits)
   const loadingMore = useRepoStore((s) => s.loadingMore)
@@ -39,6 +46,7 @@ export function GraphView() {
   const pushToast = useUiStore((s) => s.pushToast)
   const searchPending = useUiStore((s) => s.pending['commitSearch'])
   const [menu, setMenu] = useState<MenuState | null>(null)
+  const queryText = commitQuery?.text ?? ''
 
   const hasWip = (status?.files.length ?? 0) > 0
   const rows: Row[] = useMemo(
@@ -50,16 +58,13 @@ export function GraphView() {
   )
 
   const lanes = useMemo(() => assignLanes(commits), [commits])
-  const rowOf = useMemo(() => {
-    const m = new Map<string, number>()
-    rows.forEach((row, i) => {
-      if (row.type === 'commit') m.set(row.commit.hash, i)
-    })
-    return m
-  }, [rows])
   const maxLane = useMemo(
     () => commits.reduce((max, c) => Math.max(max, lanes.get(c.hash) ?? 0), 0),
     [commits, lanes]
+  )
+  const edgeIndex = useMemo(
+    () => buildGraphEdgeIndex(commits, lanes, hasWip ? 1 : 0, EDGE_BUCKET_SIZE),
+    [commits, lanes, hasWip]
   )
   const graphW = GRAPH_PAD * 2 + (maxLane + 1) * LANE_W
 
@@ -93,22 +98,41 @@ export function GraphView() {
   const [currentMatch, setCurrentMatch] = useState<string | null>(null)
   const jumping = useRef(false)
   useEffect(() => {
-    if (!commitQuery?.text) {
+    const requestId = ++commitSearchRequestId
+    if (!queryText || !repoPath) {
       setMatches(new Set())
       setSearching(false)
       return
     }
-    const text = commitQuery.text
+    const cacheKey = `${repoPath}\x00${historyVersion}\x00${queryText}`
+    const cached = commitSearchCache.get(cacheKey)
+    if (cached) {
+      setMatches(new Set(cached))
+      setSearching(false)
+      return
+    }
     const timer = setTimeout(() => {
       setSearching(true)
       window.api
-        .searchCommits(text)
-        .then((hashes) => setMatches(new Set(hashes)))
-        .catch(toastError)
-        .finally(() => setSearching(false))
+        .searchCommits(queryText)
+        .then((hashes) => {
+          if (requestId !== commitSearchRequestId) return
+          if (commitSearchCache.size >= COMMIT_SEARCH_CACHE_LIMIT) {
+            const oldest = commitSearchCache.keys().next().value
+            if (oldest) commitSearchCache.delete(oldest)
+          }
+          commitSearchCache.set(cacheKey, hashes)
+          setMatches(new Set(hashes))
+        })
+        .catch((err) => {
+          if (requestId === commitSearchRequestId) toastError(err)
+        })
+        .finally(() => {
+          if (requestId === commitSearchRequestId) setSearching(false)
+        })
     }, 300)
     return () => clearTimeout(timer)
-  }, [commitQuery, commits])
+  }, [queryText, repoPath, historyVersion])
 
   // 다음/이전 매칭으로 점프. 로드 범위에 다음 매칭이 없으면 나타날 때까지 더 불러온다
   // (검색 결과는 전체 히스토리 기준이므로 hasMore가 남아 있는 한 반드시 도달한다)
@@ -192,30 +216,20 @@ export function GraphView() {
   const y = (row: number): number => row * ROW_H + ROW_H / 2
   const color = (lane: number): string => LANE_COLORS[lane % LANE_COLORS.length]
 
-  const edges: ReactNode[] = []
+  const visibleEdges = useMemo(
+    () => visibleGraphEdges(edgeIndex, start, end, EDGE_BUCKET_SIZE),
+    [edgeIndex, start, end]
+  )
+  const edges = visibleEdges.map((edge) => (
+    <path
+      key={edge.key}
+      d={`M ${x(edge.fromLane)} ${y(edge.fromRow)} C ${x(edge.fromLane)} ${y(edge.fromRow) + ROW_H} ${x(edge.toLane)} ${y(edge.toRow) - ROW_H} ${x(edge.toLane)} ${y(edge.toRow)}`}
+      stroke={color(edge.toLane)}
+      fill="none"
+      strokeWidth="1.5"
+    />
+  ))
   const nodes: ReactNode[] = []
-  // 엣지는 출발/도착이 화면 밖이어도 선이 뷰포트를 가로지를 수 있으므로
-  // 전체를 순회하고 가시 범위와 교차하는 것만 그린다
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]
-    if (row.type !== 'commit') continue
-    const lane = lanes.get(row.commit.hash) ?? 0
-    for (const p of row.commit.parents) {
-      const pr = rowOf.get(p)
-      if (pr === undefined) continue
-      if (Math.max(i, pr) < start || Math.min(i, pr) > end) continue
-      const pl = lanes.get(p) ?? 0
-      edges.push(
-        <path
-          key={`${row.commit.hash}-${p}`}
-          d={`M ${x(lane)} ${y(i)} C ${x(lane)} ${y(i) + ROW_H} ${x(pl)} ${y(pr) - ROW_H} ${x(pl)} ${y(pr)}`}
-          stroke={color(pl)}
-          fill="none"
-          strokeWidth="1.5"
-        />
-      )
-    }
-  }
   for (let i = start; i < end; i++) {
     const row = rows[i]
     if (row.type !== 'commit') continue
@@ -223,7 +237,6 @@ export function GraphView() {
     nodes.push(<circle key={row.commit.hash} cx={x(lane)} cy={y(i)} r="4" fill={color(lane)} />)
   }
 
-  const queryText = commitQuery?.text ?? ''
   const contentH = (rows.length + (loadingMore ? 1 : 0)) * ROW_H
 
   return (

@@ -39,3 +39,4 @@ GitKraken 스타일의 Git 클라이언트 데스크톱 앱. 머지·충돌 해�
 
 - [README.md](README.md) — 프로젝트 소개·설치
 - [docs/RELEASE.md](docs/RELEASE.md) — 릴리스 상세 절차
+- `git-deploy-rules.md` — 배포·커밋 git 운영 규칙 (로컬 전용, gitignore). 커밋/푸시/릴리스 시 반드시 따른다.

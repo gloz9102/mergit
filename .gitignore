@@ -5,3 +5,5 @@ release/
 .superpowers/
 .DS_Store
 *.log
+# 로컬 전용 배포·커밋 git 운영 규칙 (개인 계정 정보 포함)
+git-deploy-rules.md

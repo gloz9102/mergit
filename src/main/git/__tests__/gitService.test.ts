@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { GitService } from '../gitService'
+import { GitService, MAX_UNTRACKED_DIFF_BYTES } from '../gitService'
 import { gitIn, makeConflictRepo, makeRepo, makeRepoWithCommits } from './fixtures'
 
 describe('GitService', () => {
@@ -328,6 +328,17 @@ describe('GitService', () => {
     writeFileSync(join(dir, 'a.txt'), 'line1\nline2\nline3\n')
     const wdiff = await svc.diffWorkingFile('a.txt', false)
     expect(wdiff).toContain('+line3')
+  })
+
+  it('diffWorkingFile: 큰 untracked 파일은 전체 내용을 읽어 diff로 만들지 않는다', async () => {
+    const dir = makeRepo()
+    const svc = new GitService(dir)
+    writeFileSync(join(dir, 'big.txt'), 'x'.repeat(MAX_UNTRACKED_DIFF_BYTES + 1))
+
+    const diff = await svc.diffWorkingFile('big.txt', false)
+
+    expect(diff).toContain('Diff omitted: untracked file is too large')
+    expect(diff.length).toBeLessThan(300)
   })
 
   it('discard: 수정을 되돌리고 untracked는 삭제한다', async () => {

@@ -201,13 +201,23 @@ export function LeftPanel() {
         <div key={stash.index} className="group flex items-center gap-1 rounded px-1 hover:bg-zinc-800">
           <span className="min-w-0 flex-1 truncate text-sm">{stash.message}</span>
           <button
-            onClick={() => void run(() => window.api.stashPop(stash.index), 'toast.stashPopped', 'stash')}
+            onClick={() =>
+              void run(() => window.api.stashPop(stash.index), 'toast.stashPopped', 'stash', {
+                status: true,
+                stashes: true
+              })
+            }
             className="hidden text-xs text-emerald-400 group-hover:block"
           >
             {t('stash.pop')}
           </button>
           <button
-            onClick={() => void run(() => window.api.stashApply(stash.index), undefined, 'stash')}
+            onClick={() =>
+              void run(() => window.api.stashApply(stash.index), undefined, 'stash', {
+                status: true,
+                stashes: true
+              })
+            }
             className="hidden text-xs text-emerald-400 group-hover:block"
           >
             {t('stash.apply')}
@@ -215,7 +225,10 @@ export function LeftPanel() {
           <button
             onClick={() =>
               ask(t('stash.dropConfirm', { name: stash.message }), () =>
-                void run(() => window.api.stashDrop(stash.index))
+                void run(() => window.api.stashDrop(stash.index), undefined, undefined, {
+                  status: true,
+                  stashes: true
+                })
               )
             }
             className="hidden text-xs text-red-400 group-hover:block"

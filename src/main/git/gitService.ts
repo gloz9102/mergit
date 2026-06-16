@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, stat, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { simpleGit, type SimpleGit } from 'simple-git'
 import { LOG_FORMAT, parseLog } from '../../shared/logParser'
@@ -11,6 +11,8 @@ import type {
   StashDto,
   StatusDto
 } from '../../shared/types'
+
+export const MAX_UNTRACKED_DIFF_BYTES = 512 * 1024
 
 export class GitService {
   private git: SimpleGit
@@ -127,7 +129,18 @@ export class GitService {
     const diff = await this.git.raw(args)
     if (diff.trim()) return diff
     // untracked 파일은 diff가 비므로 전체 내용을 추가 라인으로 표시
-    const content = await readFile(join(this.repoPath, path), 'utf-8').catch(() => '')
+    const filePath = join(this.repoPath, path)
+    const info = await stat(filePath).catch(() => null)
+    if (info && info.size > MAX_UNTRACKED_DIFF_BYTES) {
+      return [
+        `diff --git a/${path} b/${path}`,
+        '--- /dev/null',
+        `+++ b/${path}`,
+        '@@',
+        `+Diff omitted: untracked file is too large (${info.size} bytes).`
+      ].join('\n')
+    }
+    const content = await readFile(filePath, 'utf-8').catch(() => '')
     return content
       .split('\n')
       .map((l) => `+${l}`)
