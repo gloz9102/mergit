@@ -50,13 +50,18 @@ export function SettingsModal() {
             </button>
           ))}
         </div>
-        <p className="mb-1 mt-4 text-xs uppercase text-zinc-500">{t('update.version')}</p>
-        <div className="flex items-center justify-between">
-          <span className="text-sm">{appVersion ? `Mergit v${appVersion}` : t('update.unknownVersion')}</span>
+        <p className="mb-1 mt-4 text-xs uppercase text-zinc-500">{t('update.title')}</p>
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span className="text-zinc-500">{t('update.version')}</span>
+          <span className="min-w-0 truncate text-right">
+            {appVersion ? `Mergit v${appVersion}` : t('update.unknownVersion')}
+          </span>
+        </div>
+        <div className="mt-2">
           <button
             onClick={() => void checkUpdate()}
             disabled={checking}
-            className="rounded bg-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-600 disabled:opacity-50"
+            className="w-full rounded bg-emerald-700 px-3 py-1.5 text-sm font-semibold hover:bg-emerald-600 disabled:opacity-50"
           >
             {checking ? t('update.checking') : t('update.check')}
           </button>

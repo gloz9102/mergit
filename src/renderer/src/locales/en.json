@@ -102,6 +102,7 @@
     "close": "Close"
   },
   "update": {
+    "title": "Updates",
     "version": "Version",
     "check": "Check for updates",
     "checking": "Checking...",

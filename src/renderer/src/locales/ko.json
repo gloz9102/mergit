@@ -102,6 +102,7 @@
     "close": "닫기"
   },
   "update": {
+    "title": "업데이트",
     "version": "버전",
     "check": "업데이트 확인",
     "checking": "확인 중...",
