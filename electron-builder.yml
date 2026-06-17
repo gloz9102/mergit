@@ -2,6 +2,10 @@ appId: io.mergit.app
 productName: Mergit
 directories:
   output: release
+publish:
+  provider: github
+  owner: gloz9102
+  repo: mergit
 files:
   - out/**
   - resources/**

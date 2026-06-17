@@ -130,7 +130,22 @@
     "version": "Version",
     "check": "Check for updates",
     "checking": "Checking...",
+    "autoCheck": "Check for updates on startup",
+    "autoDownload": "Automatically download available updates",
     "available": "A new version v{{latest}} is available. (current v{{current}}) Open the release page?",
+    "modalTitle": "Update",
+    "availableDownload": "A new version v{{latest}} is available. (current v{{current}})",
+    "availableExternal": "A new version v{{latest}} is available. (current v{{current}}) This build cannot install it directly, so open the release page instead.",
+    "download": "Download",
+    "downloading": "Downloading...",
+    "downloadingVersion": "Downloading v{{latest}}...",
+    "downloadProgress": "{{percent}}% · {{transferred}} / {{total}} · {{speed}}/s",
+    "downloaded": "v{{latest}} has been downloaded.",
+    "restartAndInstall": "Restart and install now",
+    "installLater": "Install later",
+    "installOnQuit": "The update will be installed when the app quits.",
+    "later": "Later",
+    "openRelease": "Open release page",
     "upToDate": "You're on the latest version",
     "unknownVersion": "Version unavailable"
   },
@@ -148,7 +163,8 @@
     "NOT_A_REPO": "Not a git repository",
     "REMOTE": "Remote operation failed",
     "NO_REPO": "No repository is open",
-    "UPDATE_FAILED": "Failed to check for updates"
+    "UPDATE_FAILED": "Update failed",
+    "UPDATE_UNSUPPORTED": "Automatic updates are unavailable in this build"
   },
   "toast": {
     "pulled": "Pull complete",

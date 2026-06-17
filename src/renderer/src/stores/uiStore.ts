@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { UpdateEventDto } from '../../../shared/api'
 
 export type Selection = { type: 'commit'; hash: string } | { type: 'wip' } | { type: 'stash'; index: number } | null
 
@@ -48,6 +49,10 @@ interface UiState {
   // 진행 중인 git 작업 키 (예: 'pull') — 버튼 스피너/비활성화에 사용
   pending: Record<string, boolean>
   appVersion: string
+  autoCheckForUpdates: boolean
+  autoDownloadUpdates: boolean
+  updateState: UpdateEventDto
+  showUpdateModal: boolean
   branchCheckoutGesture: BranchCheckoutGesture
   leftPanelListLimits: LeftPanelListLimits
   alwaysShowCurrentBranch: boolean
@@ -71,6 +76,10 @@ interface UiState {
   closeConfirm(): void
   setPending(key: string, value: boolean): void
   setAppVersion(version: string): void
+  setAutoCheckForUpdates(value: boolean): void
+  setAutoDownloadUpdates(value: boolean): void
+  setUpdateState(event: UpdateEventDto): void
+  dismissUpdateModal(): void
   setBranchCheckoutGesture(gesture: BranchCheckoutGesture): void
   setLeftPanelListLimit(section: LeftPanelSection, limit: number): void
   setAlwaysShowCurrentBranch(value: boolean): void
@@ -80,6 +89,8 @@ let toastId = 0
 const BRANCH_CHECKOUT_GESTURE_KEY = 'branchCheckoutGesture'
 const LEFT_PANEL_LIST_LIMITS_KEY = 'leftPanelListLimits'
 const ALWAYS_SHOW_CURRENT_BRANCH_KEY = 'alwaysShowCurrentBranch'
+const AUTO_CHECK_FOR_UPDATES_KEY = 'autoCheckForUpdates'
+const AUTO_DOWNLOAD_UPDATES_KEY = 'autoDownloadUpdates'
 const DEFAULT_LEFT_PANEL_LIST_LIMITS: LeftPanelListLimits = {
   local: 10,
   remote: 10,
@@ -87,13 +98,13 @@ const DEFAULT_LEFT_PANEL_LIST_LIMITS: LeftPanelListLimits = {
 }
 
 function loadBranchCheckoutGesture(): BranchCheckoutGesture {
-  if (typeof localStorage === 'undefined') return 'double'
+  if (!hasLocalStorage()) return 'double'
   const saved = localStorage.getItem(BRANCH_CHECKOUT_GESTURE_KEY)
   return saved === 'single' || saved === 'double' ? saved : 'double'
 }
 
 function loadLeftPanelListLimits(): LeftPanelListLimits {
-  if (typeof localStorage === 'undefined') return DEFAULT_LEFT_PANEL_LIST_LIMITS
+  if (!hasLocalStorage()) return DEFAULT_LEFT_PANEL_LIST_LIMITS
   try {
     const saved = JSON.parse(localStorage.getItem(LEFT_PANEL_LIST_LIMITS_KEY) ?? '{}') as Partial<LeftPanelListLimits>
     return {
@@ -107,9 +118,23 @@ function loadLeftPanelListLimits(): LeftPanelListLimits {
 }
 
 function loadAlwaysShowCurrentBranch(): boolean {
-  if (typeof localStorage === 'undefined') return true
+  if (!hasLocalStorage()) return true
   const saved = localStorage.getItem(ALWAYS_SHOW_CURRENT_BRANCH_KEY)
   return saved === null ? true : saved === 'true'
+}
+
+function loadBoolean(key: string, defaultValue: boolean): boolean {
+  if (!hasLocalStorage()) return defaultValue
+  const saved = localStorage.getItem(key)
+  return saved === null ? defaultValue : saved === 'true'
+}
+
+function hasLocalStorage(): boolean {
+  return (
+    typeof localStorage !== 'undefined' &&
+    typeof localStorage.getItem === 'function' &&
+    typeof localStorage.setItem === 'function'
+  )
 }
 
 function validLimit(value: unknown): number | null {
@@ -126,6 +151,10 @@ export const useUiStore = create<UiState>((set) => ({
   confirm: null,
   pending: {},
   appVersion: '',
+  autoCheckForUpdates: loadBoolean(AUTO_CHECK_FOR_UPDATES_KEY, true),
+  autoDownloadUpdates: loadBoolean(AUTO_DOWNLOAD_UPDATES_KEY, false),
+  updateState: { status: 'idle' },
+  showUpdateModal: false,
   branchCheckoutGesture: loadBranchCheckoutGesture(),
   leftPanelListLimits: loadLeftPanelListLimits(),
   alwaysShowCurrentBranch: loadAlwaysShowCurrentBranch(),
@@ -169,8 +198,29 @@ export const useUiStore = create<UiState>((set) => ({
 
   setPending: (key, value) => set((s) => ({ pending: { ...s.pending, [key]: value } })),
   setAppVersion: (appVersion) => set({ appVersion }),
+  setAutoCheckForUpdates: (autoCheckForUpdates) => {
+    if (hasLocalStorage()) {
+      localStorage.setItem(AUTO_CHECK_FOR_UPDATES_KEY, String(autoCheckForUpdates))
+    }
+    set({ autoCheckForUpdates })
+  },
+  setAutoDownloadUpdates: (autoDownloadUpdates) => {
+    if (hasLocalStorage()) {
+      localStorage.setItem(AUTO_DOWNLOAD_UPDATES_KEY, String(autoDownloadUpdates))
+    }
+    set({ autoDownloadUpdates })
+  },
+  setUpdateState: (updateState) =>
+    set({
+      updateState,
+      showUpdateModal:
+        updateState.status === 'available' ||
+        updateState.status === 'downloading' ||
+        updateState.status === 'downloaded'
+    }),
+  dismissUpdateModal: () => set({ showUpdateModal: false }),
   setBranchCheckoutGesture: (branchCheckoutGesture) => {
-    if (typeof localStorage !== 'undefined') {
+    if (hasLocalStorage()) {
       localStorage.setItem(BRANCH_CHECKOUT_GESTURE_KEY, branchCheckoutGesture)
     }
     set({ branchCheckoutGesture })
@@ -181,13 +231,13 @@ export const useUiStore = create<UiState>((set) => ({
         ...state.leftPanelListLimits,
         [section]: Math.max(1, Math.floor(limit))
       }
-      if (typeof localStorage !== 'undefined') {
+      if (hasLocalStorage()) {
         localStorage.setItem(LEFT_PANEL_LIST_LIMITS_KEY, JSON.stringify(next))
       }
       return { leftPanelListLimits: next }
     }),
   setAlwaysShowCurrentBranch: (alwaysShowCurrentBranch) => {
-    if (typeof localStorage !== 'undefined') {
+    if (hasLocalStorage()) {
       localStorage.setItem(ALWAYS_SHOW_CURRENT_BRANCH_KEY, String(alwaysShowCurrentBranch))
     }
     set({ alwaysShowCurrentBranch })

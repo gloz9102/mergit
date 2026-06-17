@@ -8,8 +8,8 @@ const electronMock = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
   return {
     handlers,
-    app: { getVersion: vi.fn(() => '0.3.2') },
-    browserWindow: { fromWebContents: vi.fn() },
+    app: { getVersion: vi.fn(() => '0.3.2'), isPackaged: false },
+    browserWindow: { fromWebContents: vi.fn(), getAllWindows: vi.fn(() => []) },
     dialog: { showOpenDialog: vi.fn() },
     ipcMain: {
       handle: vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
@@ -19,6 +19,17 @@ const electronMock = vi.hoisted(() => {
     shell: { openExternal: vi.fn(() => Promise.resolve()) }
   }
 })
+
+const updaterMock = vi.hoisted(() => ({
+  autoUpdater: {
+    autoDownload: false,
+    autoInstallOnAppQuit: false,
+    on: vi.fn(),
+    checkForUpdates: vi.fn(),
+    downloadUpdate: vi.fn(),
+    quitAndInstall: vi.fn()
+  }
+}))
 
 const repoWatcherMock = vi.hoisted(() => ({
   start: vi.fn(),
@@ -31,6 +42,11 @@ vi.mock('electron', () => ({
   dialog: electronMock.dialog,
   ipcMain: electronMock.ipcMain,
   shell: electronMock.shell
+}))
+
+vi.mock('electron-updater', () => ({
+  default: { autoUpdater: updaterMock.autoUpdater },
+  autoUpdater: updaterMock.autoUpdater
 }))
 
 vi.mock('../git/repoWatcher', () => ({
@@ -78,7 +94,10 @@ describe('app IPC', () => {
       currentVersion: '0.3.2',
       latestVersion: '0.4.0',
       hasUpdate: true,
-      releaseUrl: 'https://github.com/gloz9102/mergit/releases/tag/v0.4.0'
+      releaseUrl: 'https://github.com/gloz9102/mergit/releases/tag/v0.4.0',
+      canDownload: false,
+      status: 'available',
+      message: 'Automatic update is unavailable in this build.'
     })
   })
 

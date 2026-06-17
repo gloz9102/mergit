@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { GIT_API_METHODS, type Envelope } from '../shared/api'
+import { GIT_API_METHODS, type Envelope, type UpdateCheckOptions, type UpdateEventDto } from '../shared/api'
 
 function unwrap(res: Envelope): unknown {
   if (res.ok) return res.data
@@ -19,8 +19,17 @@ api['onRepoChanged'] = (cb: () => void) => {
 
 // app:* 채널 — GIT_API_METHODS 자동 매핑이 아니라 수동 노출
 api['getAppVersion'] = () => ipcRenderer.invoke('app:getAppVersion').then((res: Envelope) => unwrap(res))
-api['checkForUpdates'] = () =>
-  ipcRenderer.invoke('app:checkForUpdates').then((res: Envelope) => unwrap(res))
+api['checkForUpdates'] = (options?: UpdateCheckOptions) =>
+  ipcRenderer.invoke('app:checkForUpdates', options).then((res: Envelope) => unwrap(res))
+api['downloadUpdate'] = () =>
+  ipcRenderer.invoke('app:downloadUpdate').then((res: Envelope) => unwrap(res))
+api['installDownloadedUpdate'] = () =>
+  ipcRenderer.invoke('app:installDownloadedUpdate').then((res: Envelope) => unwrap(res))
+api['onUpdateEvent'] = (cb: (event: UpdateEventDto) => void) => {
+  const listener = (_event: Electron.IpcRendererEvent, updateEvent: UpdateEventDto): void => cb(updateEvent)
+  ipcRenderer.on('update-event', listener)
+  return () => ipcRenderer.removeListener('update-event', listener)
+}
 api['openExternal'] = (url: string) =>
   ipcRenderer.invoke('app:openExternal', url).then((res: Envelope) => unwrap(res))
 

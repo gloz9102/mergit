@@ -12,11 +12,47 @@ import type {
 export type Envelope = { ok: true; data: unknown } | { ok: false; error: unknown }
 
 // 업데이트 체크 결과
+export type UpdateStatus =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'not-available'
+  | 'downloading'
+  | 'downloaded'
+  | 'error'
+  | 'unsupported'
+
+export interface UpdateProgressDto {
+  percent: number
+  transferred: number
+  total: number
+  bytesPerSecond: number
+}
+
+export interface UpdateCheckOptions {
+  autoDownload: boolean
+}
+
+export interface UpdateEventDto {
+  status: UpdateStatus
+  currentVersion?: string
+  latestVersion?: string
+  hasUpdate?: boolean
+  releaseUrl?: string
+  canDownload?: boolean
+  progress?: UpdateProgressDto
+  message?: string
+  detail?: string
+}
+
 export interface UpdateCheckDto {
   currentVersion: string
   latestVersion: string
   hasUpdate: boolean
   releaseUrl: string
+  canDownload: boolean
+  status: UpdateStatus
+  message?: string
 }
 
 export interface GitApi {
@@ -60,7 +96,10 @@ export interface GitApi {
   onRepoChanged(cb: () => void): () => void
   // app:* 채널 — git 세션 불필요, preload에서 수동 노출(GIT_API_METHODS 미포함)
   getAppVersion(): Promise<string>
-  checkForUpdates(): Promise<UpdateCheckDto>
+  checkForUpdates(options?: UpdateCheckOptions): Promise<UpdateCheckDto>
+  downloadUpdate(): Promise<void>
+  installDownloadedUpdate(): Promise<void>
+  onUpdateEvent(cb: (event: UpdateEventDto) => void): () => void
   openExternal(url: string): Promise<void>
 }
 
@@ -108,7 +147,13 @@ export const GIT_API_METHODS = [
 // GitApi(자동 매핑 제외 메서드 제외)와 GIT_API_METHODS의 불일치 시 컴파일 에러
 type IpcMethods = Exclude<
   keyof GitApi,
-  'onRepoChanged' | 'getAppVersion' | 'checkForUpdates' | 'openExternal'
+  | 'onRepoChanged'
+  | 'getAppVersion'
+  | 'checkForUpdates'
+  | 'downloadUpdate'
+  | 'installDownloadedUpdate'
+  | 'onUpdateEvent'
+  | 'openExternal'
 >
 type AssertSubset<T extends U, U> = T
 type _MethodsCoverApi = AssertSubset<IpcMethods, (typeof GIT_API_METHODS)[number]>

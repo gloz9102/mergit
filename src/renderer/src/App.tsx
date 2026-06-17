@@ -28,6 +28,7 @@ import { ConflictEditor } from './components/ConflictEditor'
 import { SettingsModal } from './components/SettingsModal'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { Toasts } from './components/Toasts'
+import { UpdateModal } from './components/UpdateModal'
 
 export default function App() {
   const repo = useRepoStore((s) => s.repo)
@@ -47,22 +48,30 @@ export default function App() {
       .catch(toastError)
   }, [])
 
-  // 앱 버전 적재 + 시작 시 1회 업데이트 체크 (자동 체크는 실패해도 조용히)
+  useEffect(
+    () =>
+      window.api.onUpdateEvent((event) => {
+        const ui = useUiStore.getState()
+        ui.setUpdateState(event)
+        if (event.status === 'error') {
+          ui.pushToast(i18n.t('error.UPDATE_FAILED'), event.detail ?? event.message)
+        }
+      }),
+    []
+  )
+
+  // 앱 버전 적재 + 설정에 따라 시작 시 1회 업데이트 체크 (자동 체크 실패는 조용히)
   useEffect(() => {
     void window.api
       .getAppVersion()
       .then((v) => useUiStore.getState().setAppVersion(v))
       .catch(() => {})
+    const ui = useUiStore.getState()
+    if (!ui.autoCheckForUpdates) return
     void window.api
-      .checkForUpdates()
+      .checkForUpdates({ autoDownload: ui.autoDownloadUpdates })
       .then((r) => {
-        if (!r.hasUpdate) return
-        const ui = useUiStore.getState()
-        if (ui.confirm) return // 이미 다이얼로그가 열려 있으면 중복 알림 방지
-        ui.ask(
-          i18n.t('update.available', { current: r.currentVersion, latest: r.latestVersion }),
-          () => void window.api.openExternal(r.releaseUrl).catch(toastError)
-        )
+        if (r.hasUpdate) useUiStore.getState().setUpdateState(r)
       })
       .catch(() => {})
   }, [])
@@ -134,6 +143,7 @@ export default function App() {
       )}
       <ConflictEditor />
       <SettingsModal />
+      <UpdateModal />
       <ConfirmDialog />
       <Toasts />
     </div>

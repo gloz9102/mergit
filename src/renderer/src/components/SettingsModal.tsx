@@ -11,10 +11,14 @@ export function SettingsModal() {
   const show = useUiStore((s) => s.showSettings)
   const setShow = useUiStore((s) => s.setShowSettings)
   const appVersion = useUiStore((s) => s.appVersion)
-  const ask = useUiStore((s) => s.ask)
   const pushToast = useUiStore((s) => s.pushToast)
   const checking = useUiStore((s) => s.pending['updateCheck'])
   const setPending = useUiStore((s) => s.setPending)
+  const autoCheckForUpdates = useUiStore((s) => s.autoCheckForUpdates)
+  const setAutoCheckForUpdates = useUiStore((s) => s.setAutoCheckForUpdates)
+  const autoDownloadUpdates = useUiStore((s) => s.autoDownloadUpdates)
+  const setAutoDownloadUpdates = useUiStore((s) => s.setAutoDownloadUpdates)
+  const setUpdateState = useUiStore((s) => s.setUpdateState)
   const branchCheckoutGesture = useUiStore((s) => s.branchCheckoutGesture)
   const setBranchCheckoutGesture = useUiStore((s) => s.setBranchCheckoutGesture)
   const listLimits = useUiStore((s) => s.leftPanelListLimits)
@@ -27,11 +31,9 @@ export function SettingsModal() {
   async function checkUpdate(): Promise<void> {
     setPending('updateCheck', true)
     try {
-      const r = await window.api.checkForUpdates()
+      const r = await window.api.checkForUpdates({ autoDownload: autoDownloadUpdates })
       if (r.hasUpdate) {
-        ask(t('update.available', { current: r.currentVersion, latest: r.latestVersion }), () =>
-          void window.api.openExternal(r.releaseUrl).catch(toastError)
-        )
+        setUpdateState(r)
       } else {
         pushToast(t('update.upToDate'))
       }
@@ -114,6 +116,24 @@ export function SettingsModal() {
             {appVersion ? `Mergit v${appVersion}` : t('update.unknownVersion')}
           </span>
         </div>
+        <label className="mt-3 flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            checked={autoCheckForUpdates}
+            onChange={(e) => setAutoCheckForUpdates(e.target.checked)}
+            className="accent-emerald-600"
+          />
+          {t('update.autoCheck')}
+        </label>
+        <label className="mt-2 flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            checked={autoDownloadUpdates}
+            onChange={(e) => setAutoDownloadUpdates(e.target.checked)}
+            className="accent-emerald-600"
+          />
+          {t('update.autoDownload')}
+        </label>
         <div className="mt-2">
           <button
             onClick={() => void checkUpdate()}

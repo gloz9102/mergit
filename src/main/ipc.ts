@@ -1,17 +1,11 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { resolve } from 'node:path'
-import { GIT_API_METHODS, type Envelope, type UpdateCheckDto } from '../shared/api'
+import { GIT_API_METHODS, type Envelope, type UpdateCheckOptions } from '../shared/api'
 import type { GitErrorDto } from '../shared/types'
-import { isNewer } from '../shared/version'
 import { toGitError } from './git/errors'
 import { GitService } from './git/gitService'
 import { RepoWatcher } from './git/repoWatcher'
-
-// 업데이트 체크 대상 저장소
-const GITHUB_OWNER = 'gloz9102'
-const GITHUB_REPO = 'mergit'
-const RELEASES_LATEST_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`
-const REQUEST_TIMEOUT_MS = 8000
+import { getUpdateService, UpdateServiceError } from './updateService'
 
 // 창(webContents)마다 독립된 git 세션 — 멀티 윈도우에서 서로 다른 저장소를 연다
 interface Session {
@@ -110,28 +104,29 @@ export function registerIpc(createWindow: () => BrowserWindow): void {
     return { ok: true, data: app.getVersion() }
   })
 
-  // GitHub Releases 최신 버전을 현재 버전과 비교
-  ipcMain.handle('app:checkForUpdates', async (): Promise<Envelope> => {
+  ipcMain.handle('app:checkForUpdates', async (_event, options?: UpdateCheckOptions): Promise<Envelope> => {
     try {
-      const res = await fetch(RELEASES_LATEST_URL, {
-        headers: { 'User-Agent': 'Mergit', Accept: 'application/vnd.github+json' },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-      })
-      if (!res.ok) throw new Error(`GitHub API ${res.status}`)
-      const json = (await res.json()) as { tag_name?: string; html_url?: string }
-      const latest = json.tag_name ?? ''
-      const current = app.getVersion()
-      const dto: UpdateCheckDto = {
-        currentVersion: current,
-        latestVersion: latest.replace(/^v/i, ''),
-        hasUpdate: isNewer(latest, current),
-        releaseUrl: json.html_url ?? `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases`
-      }
-      return { ok: true, data: dto }
+      return { ok: true, data: await getUpdateService().checkForUpdates(options) }
     } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
-      const error: GitErrorDto = { code: 'UPDATE_FAILED', message: detail.split('\n')[0], detail }
-      return { ok: false, error }
+      return { ok: false, error: toUpdateError(err) }
+    }
+  })
+
+  ipcMain.handle('app:downloadUpdate', async (): Promise<Envelope> => {
+    try {
+      await getUpdateService().downloadUpdate()
+      return { ok: true, data: null }
+    } catch (err) {
+      return { ok: false, error: toUpdateError(err) }
+    }
+  })
+
+  ipcMain.handle('app:installDownloadedUpdate', async (): Promise<Envelope> => {
+    try {
+      getUpdateService().installDownloadedUpdate()
+      return { ok: true, data: null }
+    } catch (err) {
+      return { ok: false, error: toUpdateError(err) }
     }
   })
 
@@ -163,4 +158,10 @@ export function registerIpc(createWindow: () => BrowserWindow): void {
       }
     })
   }
+}
+
+function toUpdateError(err: unknown): GitErrorDto {
+  const detail = err instanceof Error ? err.message : String(err)
+  const code = err instanceof UpdateServiceError ? err.code : 'UPDATE_FAILED'
+  return { code, message: detail.split('\n')[0], detail }
 }

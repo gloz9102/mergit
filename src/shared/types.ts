@@ -65,6 +65,7 @@ export type GitErrorCode =
   | 'REMOTE'
   | 'NO_REPO'
   | 'UPDATE_FAILED'
+  | 'UPDATE_UNSUPPORTED'
 
 export interface GitErrorDto {
   code: GitErrorCode
