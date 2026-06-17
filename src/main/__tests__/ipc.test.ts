@@ -1,6 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Envelope, UpdateCheckDto } from '../../shared/api'
+import { makeRepo } from '../git/__tests__/fixtures'
 import { registerIpc } from '../ipc'
 
 const electronMock = vi.hoisted(() => {
@@ -19,12 +20,23 @@ const electronMock = vi.hoisted(() => {
   }
 })
 
+const repoWatcherMock = vi.hoisted(() => ({
+  start: vi.fn(),
+  stop: vi.fn()
+}))
+
 vi.mock('electron', () => ({
   app: electronMock.app,
   BrowserWindow: electronMock.browserWindow,
   dialog: electronMock.dialog,
   ipcMain: electronMock.ipcMain,
   shell: electronMock.shell
+}))
+
+vi.mock('../git/repoWatcher', () => ({
+  RepoWatcher: vi.fn(function RepoWatcher() {
+    return repoWatcherMock
+  })
 }))
 
 function registerHandlers(): void {
@@ -44,6 +56,9 @@ describe('app IPC', () => {
     electronMock.app.getVersion.mockReturnValue('0.3.2')
     electronMock.shell.openExternal.mockClear()
     electronMock.ipcMain.handle.mockClear()
+    electronMock.browserWindow.fromWebContents.mockReset()
+    repoWatcherMock.start.mockClear()
+    repoWatcherMock.stop.mockClear()
     registerHandlers()
   })
 
@@ -90,5 +105,34 @@ describe('app IPC', () => {
 
     expect(res.ok).toBe(false)
     expect(electronMock.shell.openExternal).not.toHaveBeenCalled()
+  })
+
+  it('openRepoWindow: 이미 열린 저장소는 새 창 대신 기존 창을 포커스한다', async () => {
+    const dir = makeRepo()
+    const existingWindow = {
+      webContents: { id: 10 },
+      once: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMinimized: vi.fn(() => true),
+      restore: vi.fn(),
+      show: vi.fn(),
+      focus: vi.fn()
+    } as unknown as BrowserWindow
+    electronMock.browserWindow.fromWebContents.mockReturnValue(existingWindow)
+
+    const openRes = (await handler('git:openRepo')({ sender: { id: 10 } }, dir)) as Envelope
+    expect(openRes.ok).toBe(true)
+
+    const createWindow = vi.fn(
+      () => ({ webContents: { id: 11 }, once: vi.fn() }) as unknown as BrowserWindow
+    )
+    registerIpc(createWindow)
+    const newWindowRes = (await handler('git:openRepoWindow')({}, `${dir}/.`)) as Envelope
+
+    expect(newWindowRes.ok).toBe(true)
+    expect(createWindow).not.toHaveBeenCalled()
+    expect(existingWindow.restore).toHaveBeenCalled()
+    expect(existingWindow.show).toHaveBeenCalled()
+    expect(existingWindow.focus).toHaveBeenCalled()
   })
 })

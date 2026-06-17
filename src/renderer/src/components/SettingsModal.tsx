@@ -12,6 +12,8 @@ export function SettingsModal() {
   const pushToast = useUiStore((s) => s.pushToast)
   const checking = useUiStore((s) => s.pending['updateCheck'])
   const setPending = useUiStore((s) => s.setPending)
+  const branchCheckoutGesture = useUiStore((s) => s.branchCheckoutGesture)
+  const setBranchCheckoutGesture = useUiStore((s) => s.setBranchCheckoutGesture)
   if (!show) return null
 
   async function checkUpdate(): Promise<void> {
@@ -47,6 +49,24 @@ export function SettingsModal() {
               }`}
             >
               {lang === 'ko' ? '한국어' : 'English'}
+            </button>
+          ))}
+        </div>
+        <p className="mb-1 mt-4 text-xs uppercase text-zinc-500">
+          {t('settings.branchCheckout.label')}
+        </p>
+        <div className="flex gap-2">
+          {(['single', 'double'] as const).map((gesture) => (
+            <button
+              key={gesture}
+              onClick={() => setBranchCheckoutGesture(gesture)}
+              className={`flex-1 rounded px-3 py-1.5 text-sm ${
+                branchCheckoutGesture === gesture
+                  ? 'bg-emerald-700 font-semibold'
+                  : 'bg-zinc-700 hover:bg-zinc-600'
+              }`}
+            >
+              {t(`settings.branchCheckout.${gesture}`)}
             </button>
           ))}
         </div>

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { resolve } from 'node:path'
 import { GIT_API_METHODS, type Envelope, type UpdateCheckDto } from '../shared/api'
 import type { GitErrorDto } from '../shared/types'
 import { isNewer } from '../shared/version'
@@ -16,6 +17,7 @@ const REQUEST_TIMEOUT_MS = 8000
 interface Session {
   service: GitService
   watcher: RepoWatcher
+  win: BrowserWindow | null
 }
 const sessions = new Map<number, Session>()
 
@@ -24,6 +26,29 @@ const pendingRepoPaths = new Map<number, string>()
 
 // GitService 자동 매핑에서 제외하고 직접 구현하는 채널
 const CUSTOM_CHANNELS: string[] = ['selectRepo', 'openRepo', 'openRepoWindow', 'initialRepoPath']
+
+function normalizeRepoPath(path: string): string {
+  return resolve(path)
+}
+
+function focusWindow(win: BrowserWindow): void {
+  if (win.isDestroyed()) return
+  if (win.isMinimized()) win.restore()
+  win.show()
+  win.focus()
+}
+
+function focusOpenRepo(path: string): boolean {
+  const normalized = normalizeRepoPath(path)
+  for (const session of sessions.values()) {
+    const win = session.win
+    if (!win || win.isDestroyed()) continue
+    if (normalizeRepoPath(session.service.repoPath) !== normalized) continue
+    focusWindow(win)
+    return true
+  }
+  return false
+}
 
 export function registerIpc(createWindow: () => BrowserWindow): void {
   ipcMain.handle('git:selectRepo', async (): Promise<Envelope> => {
@@ -39,7 +64,7 @@ export function registerIpc(createWindow: () => BrowserWindow): void {
       const win = BrowserWindow.fromWebContents(event.sender)
       let session = sessions.get(senderId)
       if (!session) {
-        session = { service: next, watcher: new RepoWatcher() }
+        session = { service: next, watcher: new RepoWatcher(), win }
         sessions.set(senderId, session)
         win?.once('closed', () => {
           sessions.get(senderId)?.watcher.stop()
@@ -47,6 +72,7 @@ export function registerIpc(createWindow: () => BrowserWindow): void {
         })
       } else {
         session.service = next
+        session.win = win
       }
       session.watcher.start(path, () => {
         if (!win || win.isDestroyed()) return
@@ -61,6 +87,7 @@ export function registerIpc(createWindow: () => BrowserWindow): void {
   // 새 창을 만들고, 그 창이 시작할 때 열 저장소 경로를 예약해 둔다
   ipcMain.handle('git:openRepoWindow', async (_event, path: string): Promise<Envelope> => {
     try {
+      if (focusOpenRepo(path)) return { ok: true, data: null }
       const win = createWindow()
       const id = win.webContents.id
       pendingRepoPaths.set(id, path)

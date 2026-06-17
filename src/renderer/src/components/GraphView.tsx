@@ -368,10 +368,10 @@ export function GraphView() {
                 }
                 className={`absolute flex w-full cursor-pointer items-center gap-2 pr-2 text-sm ${
                   isSelected
-                    ? 'bg-zinc-700'
+                    ? 'bg-zinc-700/55'
                     : isMatch
-                      ? 'bg-emerald-900/40 hover:bg-emerald-900/60'
-                      : 'hover:bg-zinc-800'
+                      ? 'bg-emerald-900/30 hover:bg-emerald-900/45'
+                      : 'hover:bg-zinc-800/45'
                 } ${isCurrent ? 'ring-1 ring-inset ring-emerald-400' : ''}`}
                 style={{ top: i * ROW_H, height: ROW_H, paddingLeft: graphW + 8 }}
               >

@@ -19,6 +19,8 @@ export interface CommitQuery {
   text: string
 }
 
+export type BranchCheckoutGesture = 'single' | 'double'
+
 interface Toast {
   id: number
   message: string
@@ -39,6 +41,7 @@ interface UiState {
   // 진행 중인 git 작업 키 (예: 'pull') — 버튼 스피너/비활성화에 사용
   pending: Record<string, boolean>
   appVersion: string
+  branchCheckoutGesture: BranchCheckoutGesture
   diffView: DiffView | null
   branchQuery: BranchQuery | null
   commitQuery: CommitQuery | null
@@ -59,9 +62,17 @@ interface UiState {
   closeConfirm(): void
   setPending(key: string, value: boolean): void
   setAppVersion(version: string): void
+  setBranchCheckoutGesture(gesture: BranchCheckoutGesture): void
 }
 
 let toastId = 0
+const BRANCH_CHECKOUT_GESTURE_KEY = 'branchCheckoutGesture'
+
+function loadBranchCheckoutGesture(): BranchCheckoutGesture {
+  if (typeof localStorage === 'undefined') return 'double'
+  const saved = localStorage.getItem(BRANCH_CHECKOUT_GESTURE_KEY)
+  return saved === 'single' || saved === 'double' ? saved : 'double'
+}
 
 export const useUiStore = create<UiState>((set) => ({
   selected: null,
@@ -71,6 +82,7 @@ export const useUiStore = create<UiState>((set) => ({
   confirm: null,
   pending: {},
   appVersion: '',
+  branchCheckoutGesture: loadBranchCheckoutGesture(),
   diffView: null,
 
   branchQuery: null,
@@ -110,5 +122,11 @@ export const useUiStore = create<UiState>((set) => ({
   closeConfirm: () => set({ confirm: null }),
 
   setPending: (key, value) => set((s) => ({ pending: { ...s.pending, [key]: value } })),
-  setAppVersion: (appVersion) => set({ appVersion })
+  setAppVersion: (appVersion) => set({ appVersion }),
+  setBranchCheckoutGesture: (branchCheckoutGesture) => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(BRANCH_CHECKOUT_GESTURE_KEY, branchCheckoutGesture)
+    }
+    set({ branchCheckoutGesture })
+  }
 }))

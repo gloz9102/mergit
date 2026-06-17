@@ -25,6 +25,7 @@ export function LeftPanel() {
   const branchQuery = useUiStore((s) => s.branchQuery)
   const setBranchQueryText = useUiStore((s) => s.setBranchQueryText)
   const closeBranchQuery = useUiStore((s) => s.closeBranchQuery)
+  const branchCheckoutGesture = useUiStore((s) => s.branchCheckoutGesture)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [renaming, setRenaming] = useState<{ from: string; value: string } | null>(null)
   // 섹션(로컬/원격/스태시) 접힘 상태 — localStorage에 보존
@@ -125,7 +126,12 @@ export function LeftPanel() {
     return (
       <button
         key={branch.name}
-        onDoubleClick={() => checkout(branch)}
+        onClick={() => {
+          if (branchCheckoutGesture === 'single') checkout(branch)
+        }}
+        onDoubleClick={() => {
+          if (branchCheckoutGesture === 'double') checkout(branch)
+        }}
         onContextMenu={(e) => {
           e.preventDefault()
           setMenu({ x: e.clientX, y: e.clientY, branch })

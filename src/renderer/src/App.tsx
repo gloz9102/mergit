@@ -33,6 +33,7 @@ export default function App() {
   const repo = useRepoStore((s) => s.repo)
   const refresh = useRepoStore((s) => s.refresh)
   const diffView = useUiStore((s) => s.diffView)
+  const appVersion = useUiStore((s) => s.appVersion)
   const [leftWidth, resizeLeft] = usePanelWidth('leftPanelWidth', 224)
   const [rightWidth, resizeRight] = usePanelWidth('rightPanelWidth', 320)
 
@@ -66,10 +67,11 @@ export default function App() {
       .catch(() => {})
   }, [])
 
-  // 창 제목: 저장소가 열려 있으면 "[저장소명] - Mergit"
+  // 창 제목: 저장소명과 앱 버전을 함께 보여준다.
   useEffect(() => {
-    document.title = repo ? `${repo.name} - Mergit` : 'Mergit'
-  }, [repo])
+    const appTitle = `Mergit${appVersion ? ` v${appVersion}` : ''}`
+    document.title = repo ? `${repo.name} - ${appTitle}` : appTitle
+  }, [appVersion, repo])
 
   // 전역 키 입력: 포커스 없는 타이핑 → 브랜치 필터, Ctrl/Cmd+F → 브랜치 검색
   useEffect(() => {

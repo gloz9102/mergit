@@ -7,6 +7,7 @@ function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
+    title: `Mergit v${app.getVersion()}`,
     // 창/작업표시줄 아이콘 (Windows·Linux, dev 포함 — macOS는 무시)
     icon,
     webPreferences: {
