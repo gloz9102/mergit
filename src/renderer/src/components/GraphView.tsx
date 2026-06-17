@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { assignLanes } from '../../../shared/lanes'
 import type { CommitDto, HistoryOrder } from '../../../shared/types'
+import { commitRefBadges } from '../lib/commitRefs'
 import { substringMatch } from '../lib/fuzzy'
 import { buildGraphEdgeIndex, visibleGraphEdges } from '../lib/graphEdges'
 import { run, toastError } from '../lib/run'
@@ -378,12 +379,16 @@ export function GraphView() {
                   <span className="italic text-amber-300">{t('panel.wip')}</span>
                 ) : (
                   <>
-                    {row.commit.refs.map((r) => (
+                    {commitRefBadges(row.commit.refs).map((ref) => (
                       <span
-                        key={r}
-                        className="shrink-0 rounded bg-zinc-700 px-1 text-xs text-emerald-300"
+                        key={ref.key}
+                        className={`shrink-0 rounded px-1 text-xs ${
+                          ref.kind === 'head'
+                            ? 'bg-amber-500/20 text-amber-200 ring-1 ring-inset ring-amber-400/40'
+                            : 'bg-zinc-700 text-emerald-300'
+                        }`}
                       >
-                        {r.replace('HEAD -> ', '')}
+                        {ref.label}
                       </span>
                     ))}
                     <span className="truncate">
