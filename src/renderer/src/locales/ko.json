@@ -87,6 +87,10 @@
     "apply": "적용",
     "pop": "Pop",
     "drop": "삭제",
+    "detailTitle": "스태시",
+    "files": "포함 파일",
+    "loadingFiles": "스태시 파일 불러오는 중...",
+    "noFiles": "표시할 파일이 없습니다",
     "dropConfirm": "스태시 '{{name}}'을(를) 삭제할까요?",
     "messagePlaceholder": "스태시 메시지 (선택)"
   },
@@ -111,6 +115,14 @@
       "single": "싱글클릭",
       "double": "더블클릭"
     },
+    "listLimit": {
+      "title": "최대 나열 개수",
+      "local": "로컬",
+      "remote": "원격",
+      "stash": "스태시",
+      "custom": "직접입력"
+    },
+    "alwaysShowCurrentBranch": "현재 브랜치 항상 보임",
     "close": "닫기"
   },
   "update": {

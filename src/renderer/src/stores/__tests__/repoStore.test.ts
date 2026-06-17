@@ -108,7 +108,7 @@ describe('repoStore.refresh', () => {
   it('loadMore는 현재 history 옵션으로 다음 페이지를 읽는다', async () => {
     const api = installApi()
     useRepoStore.setState({
-      commits: [{ hash: 'a', parents: [], author: 'A', email: 'a@test.com', date: '', subject: 'a', refs: [] }],
+      commits: [{ hash: 'a', parents: [], author: 'A', email: 'a@test.com', date: '', subject: 'a', body: '', refs: [] }],
       historyOptions: { order: 'date-order', all: true }
     })
 

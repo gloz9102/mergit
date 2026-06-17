@@ -1,7 +1,10 @@
 import { useTranslation } from 'react-i18next'
+import { useState } from 'react'
 import { setLanguage } from '../i18n'
 import { toastError } from '../lib/run'
-import { useUiStore } from '../stores/uiStore'
+import { useUiStore, type LeftPanelSection } from '../stores/uiStore'
+
+const LIST_LIMIT_PRESETS = [5, 10, 15] as const
 
 export function SettingsModal() {
   const { t, i18n } = useTranslation()
@@ -14,6 +17,11 @@ export function SettingsModal() {
   const setPending = useUiStore((s) => s.setPending)
   const branchCheckoutGesture = useUiStore((s) => s.branchCheckoutGesture)
   const setBranchCheckoutGesture = useUiStore((s) => s.setBranchCheckoutGesture)
+  const listLimits = useUiStore((s) => s.leftPanelListLimits)
+  const setListLimit = useUiStore((s) => s.setLeftPanelListLimit)
+  const alwaysShowCurrentBranch = useUiStore((s) => s.alwaysShowCurrentBranch)
+  const setAlwaysShowCurrentBranch = useUiStore((s) => s.setAlwaysShowCurrentBranch)
+  const [customLimitOpen, setCustomLimitOpen] = useState<Partial<Record<LeftPanelSection, boolean>>>({})
   if (!show) return null
 
   async function checkUpdate(): Promise<void> {
@@ -36,7 +44,7 @@ export function SettingsModal() {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50">
-      <div className="w-80 rounded-lg border border-zinc-600 bg-zinc-800 p-4">
+      <div className="w-96 rounded-lg border border-zinc-600 bg-zinc-800 p-4">
         <p className="mb-3 font-semibold">{t('settings.title')}</p>
         <p className="mb-1 text-xs uppercase text-zinc-500">{t('settings.language')}</p>
         <div className="flex gap-2">
@@ -70,6 +78,35 @@ export function SettingsModal() {
             </button>
           ))}
         </div>
+        <p className="mb-1 mt-4 text-xs uppercase text-zinc-500">{t('settings.listLimit.title')}</p>
+        <div className="space-y-2">
+          {(['local', 'remote', 'stash'] as const).map((section) => (
+            <ListLimitControl
+              key={section}
+              label={t(`settings.listLimit.${section}`)}
+              value={listLimits[section]}
+              customOpen={
+                !!customLimitOpen[section] ||
+                !LIST_LIMIT_PRESETS.some((preset) => preset === listLimits[section])
+              }
+              onPreset={(limit) => {
+                setCustomLimitOpen((state) => ({ ...state, [section]: false }))
+                setListLimit(section, limit)
+              }}
+              onCustomOpen={() => setCustomLimitOpen((state) => ({ ...state, [section]: true }))}
+              onCustomChange={(limit) => setListLimit(section, limit)}
+            />
+          ))}
+        </div>
+        <label className="mt-4 flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            checked={alwaysShowCurrentBranch}
+            onChange={(e) => setAlwaysShowCurrentBranch(e.target.checked)}
+            className="accent-emerald-600"
+          />
+          {t('settings.alwaysShowCurrentBranch')}
+        </label>
         <p className="mb-1 mt-4 text-xs uppercase text-zinc-500">{t('update.title')}</p>
         <div className="flex items-center justify-between gap-3 text-sm">
           <span className="text-zinc-500">{t('update.version')}</span>
@@ -91,6 +128,64 @@ export function SettingsModal() {
             {t('settings.close')}
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function ListLimitControl({
+  label,
+  value,
+  customOpen,
+  onPreset,
+  onCustomOpen,
+  onCustomChange
+}: {
+  label: string
+  value: number
+  customOpen: boolean
+  onPreset: (limit: number) => void
+  onCustomOpen: () => void
+  onCustomChange: (limit: number) => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <div className="grid grid-cols-[72px_1fr] items-center gap-2">
+      <span className="text-xs text-zinc-400">{label}</span>
+      <div className="flex min-w-0 items-center gap-1">
+        {LIST_LIMIT_PRESETS.map((limit) => (
+          <button
+            key={limit}
+            onClick={() => onPreset(limit)}
+            className={`rounded px-2 py-1 text-xs ${
+              value === limit && !customOpen
+                ? 'bg-emerald-700 font-semibold'
+                : 'bg-zinc-700 hover:bg-zinc-600'
+            }`}
+          >
+            {limit}
+          </button>
+        ))}
+        {customOpen ? (
+          <input
+            type="number"
+            min={1}
+            max={999}
+            value={value}
+            onChange={(e) => {
+              const next = Number(e.target.value)
+              if (Number.isFinite(next) && next >= 1) onCustomChange(next)
+            }}
+            className="min-w-0 flex-1 rounded bg-zinc-900 px-2 py-1 text-xs outline-none ring-1 ring-emerald-500"
+          />
+        ) : (
+          <button
+            onClick={onCustomOpen}
+            className="min-w-0 flex-1 rounded bg-zinc-700 px-2 py-1 text-xs hover:bg-zinc-600"
+          >
+            {t('settings.listLimit.custom')}
+          </button>
+        )}
       </div>
     </div>
   )

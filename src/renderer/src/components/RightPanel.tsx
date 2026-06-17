@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { useRepoStore } from '../stores/repoStore'
 import { useUiStore } from '../stores/uiStore'
 import { CommitDetail } from './CommitDetail'
+import { StashDetail } from './StashDetail'
 import { StagingPanel } from './StagingPanel'
 
 export function RightPanel() {
@@ -14,6 +15,8 @@ export function RightPanel() {
     <div className="flex h-full w-full flex-col overflow-hidden">
       {selected?.type === 'commit' ? (
         <CommitDetail hash={selected.hash} />
+      ) : selected?.type === 'stash' ? (
+        <StashDetail index={selected.index} />
       ) : selected?.type === 'wip' && hasWip ? (
         <StagingPanel />
       ) : (

@@ -51,6 +51,11 @@ export function CommitDetail({ hash }: { hash: string }) {
   return (
     <div className="flex h-full flex-col gap-2 p-3 text-sm">
       <p className="font-semibold">{commit.subject}</p>
+      {commit.body && (
+        <div className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded bg-zinc-900/70 p-2 text-sm text-zinc-300 ring-1 ring-zinc-800">
+          {commit.body}
+        </div>
+      )}
       <p className="text-xs text-zinc-500">
         {commit.author} · {new Date(commit.date).toLocaleString()} ·{' '}
         <span className="font-mono">{commit.hash.slice(0, 8)}</span>

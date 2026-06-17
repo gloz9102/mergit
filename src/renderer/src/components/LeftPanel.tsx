@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { BranchDto, GitErrorDto } from '../../../shared/types'
 import { fuzzyMatch } from '../lib/fuzzy'
+import { limitBranches, limitList, type LimitedList } from '../lib/listLimits'
 import { run, toastError } from '../lib/run'
 import { useRepoStore } from '../stores/repoStore'
 import { useUiStore } from '../stores/uiStore'
@@ -26,6 +27,10 @@ export function LeftPanel() {
   const setBranchQueryText = useUiStore((s) => s.setBranchQueryText)
   const closeBranchQuery = useUiStore((s) => s.closeBranchQuery)
   const branchCheckoutGesture = useUiStore((s) => s.branchCheckoutGesture)
+  const listLimits = useUiStore((s) => s.leftPanelListLimits)
+  const alwaysShowCurrentBranch = useUiStore((s) => s.alwaysShowCurrentBranch)
+  const selected = useUiStore((s) => s.selected)
+  const select = useUiStore((s) => s.select)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [renaming, setRenaming] = useState<{ from: string; value: string } | null>(null)
   // 섹션(로컬/원격/스태시) 접힘 상태 — localStorage에 보존
@@ -55,14 +60,41 @@ export function LeftPanel() {
         .map((b) => ({ branch: b, m: fuzzyMatch(branchQuery?.text ?? '', b.name) }))
         .filter(({ m }) => branchQuery?.mode !== 'filter' || m.matched)
         .map(({ branch, m }) => ({ branch, indices: branchQuery ? m.indices : [] }))
+    const localBranches = branches.filter((b) => !b.isRemote)
     return {
-      // 현재 체크아웃된 브랜치를 목록 최상단에 고정 (stable sort라 나머지 순서 유지)
+      // 설정이 켜져 있으면 현재 체크아웃된 브랜치를 목록 최상단에 고정한다.
       locals: withMatch(
-        [...branches.filter((b) => !b.isRemote)].sort((a, b) => Number(b.current) - Number(a.current))
+        alwaysShowCurrentBranch
+          ? [...localBranches].sort((a, b) => Number(b.current) - Number(a.current))
+          : localBranches
       ),
       remotes: withMatch(branches.filter((b) => b.isRemote))
     }
-  }, [branches, branchQuery])
+  }, [alwaysShowCurrentBranch, branches, branchQuery])
+
+  const bypassListLimit = !!branchQuery
+  const limitedLocals = useMemo(
+    () =>
+      limitBranches(
+        locals.map((item) => item.branch),
+        listLimits.local,
+        bypassListLimit,
+        alwaysShowCurrentBranch
+      ),
+    [alwaysShowCurrentBranch, bypassListLimit, listLimits.local, locals]
+  )
+  const limitedRemotes = useMemo(
+    () => limitList(remotes.map((item) => item.branch), listLimits.remote, bypassListLimit),
+    [bypassListLimit, listLimits.remote, remotes]
+  )
+  const limitedStashes = useMemo(
+    () => limitList(stashes, listLimits.stash, bypassListLimit),
+    [bypassListLimit, listLimits.stash, stashes]
+  )
+
+  function indicesFor(branch: BranchDto, list: { branch: BranchDto; indices: number[] }[]): number[] {
+    return list.find((item) => item.branch.name === branch.name)?.indices ?? []
+  }
 
   const noMatch = branchQuery?.mode === 'filter' && locals.length + remotes.length === 0
 
@@ -185,7 +217,12 @@ export function LeftPanel() {
         open={isOpen('local')}
         onToggle={() => toggleSection('local')}
       />
-      {isOpen('local') && locals.map(branchRow)}
+      {isOpen('local') && (
+        <>
+          {limitedLocals.visible.map((branch) => branchRow({ branch, indices: indicesFor(branch, locals) }))}
+          <OverflowRow result={limitedLocals} />
+        </>
+      )}
       <SectionHeader
         title={t('panel.remote')}
         count={remotes.length}
@@ -193,7 +230,12 @@ export function LeftPanel() {
         onToggle={() => toggleSection('remote')}
         topGap
       />
-      {isOpen('remote') && remotes.map(branchRow)}
+      {isOpen('remote') && (
+        <>
+          {limitedRemotes.visible.map((branch) => branchRow({ branch, indices: indicesFor(branch, remotes) }))}
+          <OverflowRow result={limitedRemotes} />
+        </>
+      )}
       {noMatch && <p className="mt-2 text-xs text-zinc-500">{t('branchSearch.noMatch')}</p>}
       <SectionHeader
         title={t('panel.stash')}
@@ -203,46 +245,21 @@ export function LeftPanel() {
         topGap
       />
       {isOpen('stash') &&
-        stashes.map((stash) => (
-        <div key={stash.index} className="group flex items-center gap-1 rounded px-1 hover:bg-zinc-800">
-          <span className="min-w-0 flex-1 truncate text-sm">{stash.message}</span>
-          <button
-            onClick={() =>
-              void run(() => window.api.stashPop(stash.index), 'toast.stashPopped', 'stash', {
-                status: true,
-                stashes: true
-              })
-            }
-            className="hidden text-xs text-emerald-400 group-hover:block"
-          >
-            {t('stash.pop')}
-          </button>
-          <button
-            onClick={() =>
-              void run(() => window.api.stashApply(stash.index), undefined, 'stash', {
-                status: true,
-                stashes: true
-              })
-            }
-            className="hidden text-xs text-emerald-400 group-hover:block"
-          >
-            {t('stash.apply')}
-          </button>
-          <button
-            onClick={() =>
-              ask(t('stash.dropConfirm', { name: stash.message }), () =>
-                void run(() => window.api.stashDrop(stash.index), undefined, undefined, {
-                  status: true,
-                  stashes: true
-                })
-              )
-            }
-            className="hidden text-xs text-red-400 group-hover:block"
-          >
-            {t('stash.drop')}
-          </button>
-        </div>
-      ))}
+        <>
+        {limitedStashes.visible.map((stash) => (
+        <button
+          key={stash.index}
+          onClick={() => select({ type: 'stash', index: stash.index })}
+          className={`block w-full truncate rounded px-1 py-0.5 text-left text-sm hover:bg-zinc-800 ${
+            selected?.type === 'stash' && selected.index === stash.index ? 'bg-zinc-700' : ''
+          }`}
+        >
+          {stash.message}
+        </button>
+        ))}
+        <OverflowRow result={limitedStashes} />
+        </>
+      }
 
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
@@ -287,6 +304,18 @@ export function LeftPanel() {
           )}
         </ContextMenu>
       )}
+    </div>
+  )
+}
+
+function OverflowRow({ result }: { result: LimitedList<unknown> }) {
+  if (result.hiddenCount === 0) return null
+  return (
+    <div
+      className="rounded px-1 py-0.5 text-sm text-zinc-500"
+      title={`${result.hiddenCount} hidden`}
+    >
+      ...
     </div>
   )
 }

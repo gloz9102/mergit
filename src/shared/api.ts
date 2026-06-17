@@ -51,6 +51,7 @@ export interface GitApi {
   fetch(): Promise<void>
   stashSave(message: string, paths?: string[]): Promise<void>
   stashList(): Promise<StashDto[]>
+  stashFiles(index: number): Promise<CommitFileDto[]>
   stashApply(index: number): Promise<void>
   stashPop(index: number): Promise<void>
   stashDrop(index: number): Promise<void>
@@ -96,6 +97,7 @@ export const GIT_API_METHODS = [
   'fetch',
   'stashSave',
   'stashList',
+  'stashFiles',
   'stashApply',
   'stashPop',
   'stashDrop',

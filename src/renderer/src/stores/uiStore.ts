@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type Selection = { type: 'commit'; hash: string } | { type: 'wip' } | null
+export type Selection = { type: 'commit'; hash: string } | { type: 'wip' } | { type: 'stash'; index: number } | null
 
 // 중앙 영역에 크게 표시되는 diff (그래프를 잠시 대체)
 export interface DiffView {
@@ -20,6 +20,13 @@ export interface CommitQuery {
 }
 
 export type BranchCheckoutGesture = 'single' | 'double'
+export type LeftPanelSection = 'local' | 'remote' | 'stash'
+
+export interface LeftPanelListLimits {
+  local: number
+  remote: number
+  stash: number
+}
 
 interface Toast {
   id: number
@@ -42,6 +49,8 @@ interface UiState {
   pending: Record<string, boolean>
   appVersion: string
   branchCheckoutGesture: BranchCheckoutGesture
+  leftPanelListLimits: LeftPanelListLimits
+  alwaysShowCurrentBranch: boolean
   diffView: DiffView | null
   branchQuery: BranchQuery | null
   commitQuery: CommitQuery | null
@@ -63,15 +72,50 @@ interface UiState {
   setPending(key: string, value: boolean): void
   setAppVersion(version: string): void
   setBranchCheckoutGesture(gesture: BranchCheckoutGesture): void
+  setLeftPanelListLimit(section: LeftPanelSection, limit: number): void
+  setAlwaysShowCurrentBranch(value: boolean): void
 }
 
 let toastId = 0
 const BRANCH_CHECKOUT_GESTURE_KEY = 'branchCheckoutGesture'
+const LEFT_PANEL_LIST_LIMITS_KEY = 'leftPanelListLimits'
+const ALWAYS_SHOW_CURRENT_BRANCH_KEY = 'alwaysShowCurrentBranch'
+const DEFAULT_LEFT_PANEL_LIST_LIMITS: LeftPanelListLimits = {
+  local: 10,
+  remote: 10,
+  stash: 10
+}
 
 function loadBranchCheckoutGesture(): BranchCheckoutGesture {
   if (typeof localStorage === 'undefined') return 'double'
   const saved = localStorage.getItem(BRANCH_CHECKOUT_GESTURE_KEY)
   return saved === 'single' || saved === 'double' ? saved : 'double'
+}
+
+function loadLeftPanelListLimits(): LeftPanelListLimits {
+  if (typeof localStorage === 'undefined') return DEFAULT_LEFT_PANEL_LIST_LIMITS
+  try {
+    const saved = JSON.parse(localStorage.getItem(LEFT_PANEL_LIST_LIMITS_KEY) ?? '{}') as Partial<LeftPanelListLimits>
+    return {
+      local: validLimit(saved.local) ?? DEFAULT_LEFT_PANEL_LIST_LIMITS.local,
+      remote: validLimit(saved.remote) ?? DEFAULT_LEFT_PANEL_LIST_LIMITS.remote,
+      stash: validLimit(saved.stash) ?? DEFAULT_LEFT_PANEL_LIST_LIMITS.stash
+    }
+  } catch {
+    return DEFAULT_LEFT_PANEL_LIST_LIMITS
+  }
+}
+
+function loadAlwaysShowCurrentBranch(): boolean {
+  if (typeof localStorage === 'undefined') return true
+  const saved = localStorage.getItem(ALWAYS_SHOW_CURRENT_BRANCH_KEY)
+  return saved === null ? true : saved === 'true'
+}
+
+function validLimit(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 1
+    ? Math.floor(value)
+    : null
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -83,6 +127,8 @@ export const useUiStore = create<UiState>((set) => ({
   pending: {},
   appVersion: '',
   branchCheckoutGesture: loadBranchCheckoutGesture(),
+  leftPanelListLimits: loadLeftPanelListLimits(),
+  alwaysShowCurrentBranch: loadAlwaysShowCurrentBranch(),
   diffView: null,
 
   branchQuery: null,
@@ -128,5 +174,22 @@ export const useUiStore = create<UiState>((set) => ({
       localStorage.setItem(BRANCH_CHECKOUT_GESTURE_KEY, branchCheckoutGesture)
     }
     set({ branchCheckoutGesture })
+  },
+  setLeftPanelListLimit: (section, limit) =>
+    set((state) => {
+      const next = {
+        ...state.leftPanelListLimits,
+        [section]: Math.max(1, Math.floor(limit))
+      }
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(LEFT_PANEL_LIST_LIMITS_KEY, JSON.stringify(next))
+      }
+      return { leftPanelListLimits: next }
+    }),
+  setAlwaysShowCurrentBranch: (alwaysShowCurrentBranch) => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(ALWAYS_SHOW_CURRENT_BRANCH_KEY, String(alwaysShowCurrentBranch))
+    }
+    set({ alwaysShowCurrentBranch })
   }
 }))

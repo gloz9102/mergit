@@ -87,6 +87,10 @@
     "apply": "Apply",
     "pop": "Pop",
     "drop": "Drop",
+    "detailTitle": "Stash",
+    "files": "Files",
+    "loadingFiles": "Loading stash files...",
+    "noFiles": "No files to show",
     "dropConfirm": "Drop stash '{{name}}'?",
     "messagePlaceholder": "Stash message (optional)"
   },
@@ -111,6 +115,14 @@
       "single": "Single click",
       "double": "Double click"
     },
+    "listLimit": {
+      "title": "Maximum visible items",
+      "local": "Local",
+      "remote": "Remote",
+      "stash": "Stash",
+      "custom": "Custom"
+    },
+    "alwaysShowCurrentBranch": "Always show current branch",
     "close": "Close"
   },
   "update": {

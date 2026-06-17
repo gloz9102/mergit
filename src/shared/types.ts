@@ -10,6 +10,7 @@ export interface CommitDto {
   email: string
   date: string // ISO 8601
   subject: string
+  body: string
   refs: string[] // 예: ["HEAD -> main", "origin/main"]
 }
 

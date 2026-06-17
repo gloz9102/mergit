@@ -288,6 +288,19 @@ export class GitService {
       .map((line, i) => ({ index: i, message: line.replace(/^stash@\{\d+\}:\s*/, '') }))
   }
 
+  async stashFiles(index: number): Promise<CommitFileDto[]> {
+    const raw = await this.git
+      .raw(['stash', 'show', '--include-untracked', '--name-status', `stash@{${index}}`])
+      .catch(() => '')
+    return raw
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const [status, ...rest] = line.split('\t')
+        return { path: rest.join('\t'), status: status[0] }
+      })
+  }
+
   // stash apply/pop은 충돌 시 git이 종료 코드 1을 반환하지만 메시지가 stdout으로
   // 나가 simple-git이 성공으로 처리한다 → 직접 충돌을 검사해 에러로 승격한다
   private async stashRun(args: string[]): Promise<void> {

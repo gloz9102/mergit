@@ -3,7 +3,7 @@ import { assignLanes } from '../lanes'
 import type { CommitDto } from '../types'
 
 function commit(hash: string, parents: string[]): CommitDto {
-  return { hash, parents, author: 'A', email: 'a@t.com', date: '', subject: hash, refs: [] }
+  return { hash, parents, author: 'A', email: 'a@t.com', date: '', subject: hash, body: '', refs: [] }
 }
 
 describe('assignLanes', () => {

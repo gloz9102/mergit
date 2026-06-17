@@ -115,6 +115,20 @@ describe('GitService', () => {
     expect(commits[0].parents).toHaveLength(1)
   })
 
+  it('log: 커밋 본문 description을 subject와 함께 반환한다', async () => {
+    const dir = makeRepo()
+    const git = gitIn(dir)
+    writeFileSync(join(dir, 'b.txt'), 'body\n')
+    git('add', '.')
+    git('commit', '-m', 'title', '-m', 'body line 1\nbody line 2')
+    const svc = new GitService(dir)
+
+    const [commit] = await svc.log(0, 1)
+
+    expect(commit.subject).toBe('title')
+    expect(commit.body).toBe('body line 1\nbody line 2')
+  })
+
   it('commit amend: 커밋 수는 그대로, 메시지와 내용이 바뀐다', async () => {
     const dir = makeRepo()
     writeFileSync(join(dir, 'a.txt'), 'amended content\n')
@@ -290,6 +304,23 @@ describe('GitService', () => {
     expect((await svc.status()).files).toHaveLength(1)
     await svc.stashDrop(0)
     expect(await svc.stashList()).toEqual([])
+  })
+
+  it('stashFiles: 스태시에 포함된 파일 목록을 반환한다', async () => {
+    const dir = makeRepo()
+    writeFileSync(join(dir, 'a.txt'), 'tracked change\n')
+    writeFileSync(join(dir, 'new.txt'), 'new\n')
+    const svc = new GitService(dir)
+
+    await svc.stashSave('with files')
+    const files = await svc.stashFiles(0)
+
+    expect(files).toEqual(
+      expect.arrayContaining([
+        { path: 'a.txt', status: 'M' },
+        { path: 'new.txt', status: 'A' }
+      ])
+    )
   })
 
   it('stashSave: 지정한 파일만 스태시하고 나머지는 남긴다', async () => {

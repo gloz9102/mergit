@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 
 // 우클릭 컨텍스트 메뉴 — 바깥 클릭으로 닫히고, 내부 클릭은 전파를 막는다.
 // 항목은 MenuItem으로 구성하며 각 onClick에서 onClose를 호출해 닫는다.
@@ -13,13 +13,34 @@ export function ContextMenu({
   onClose: () => void
   children: ReactNode
 }) {
+  const ref = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
-    // 클릭으로 메뉴를 여는 경우(툴바 드롭다운 등) 그 클릭이 window까지 버블링되며
-    // 곧바로 닫기로 이어지므로, 리스너 등록을 현재 이벤트 디스패치 이후로 미룬다
-    const id = setTimeout(() => window.addEventListener('click', onClose), 0)
+    function onPointerDown(e: PointerEvent): void {
+      if (ref.current?.contains(e.target as Node)) return
+      onClose()
+    }
+
+    function onContextMenu(e: MouseEvent): void {
+      if (ref.current?.contains(e.target as Node)) return
+      onClose()
+    }
+
+    function onKeyDown(e: KeyboardEvent): void {
+      if (e.key === 'Escape') onClose()
+    }
+
+    // 메뉴를 여는 같은 이벤트를 잡지 않도록 현재 dispatch 뒤에 등록한다.
+    const id = setTimeout(() => {
+      window.addEventListener('pointerdown', onPointerDown, true)
+      window.addEventListener('contextmenu', onContextMenu, true)
+      window.addEventListener('keydown', onKeyDown)
+    }, 0)
     return () => {
       clearTimeout(id)
-      window.removeEventListener('click', onClose)
+      window.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('contextmenu', onContextMenu, true)
+      window.removeEventListener('keydown', onKeyDown)
     }
   }, [onClose])
 
@@ -30,9 +51,9 @@ export function ContextMenu({
 
   return (
     <div
+      ref={ref}
       className="fixed z-50 w-56 rounded border border-zinc-600 bg-zinc-800 py-1 text-sm shadow-xl"
       style={{ left, top }}
-      onClick={(e) => e.stopPropagation()}
     >
       {children}
     </div>

@@ -4,7 +4,7 @@ import type { CommitDto } from '../../../../shared/types'
 import { buildGraphEdgeIndex, visibleGraphEdges } from '../graphEdges'
 
 function commit(hash: string, parents: string[]): CommitDto {
-  return { hash, parents, author: 'A', email: 'a@t.com', date: '', subject: hash, refs: [] }
+  return { hash, parents, author: 'A', email: 'a@t.com', date: '', subject: hash, body: '', refs: [] }
 }
 
 describe('graphEdges', () => {
