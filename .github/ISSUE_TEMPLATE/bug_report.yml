@@ -1,0 +1,71 @@
+name: Bug report
+description: Report something that is broken in Mergit.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please include enough detail to reproduce it with a local git repository when possible.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+      placeholder: Mergit fails to...
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the smallest set of steps that triggers the bug.
+      placeholder: |
+        1. Open repository...
+        2. Click...
+        3. See...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect Mergit to do?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What did Mergit do instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Mergit version
+      placeholder: v0.5.1
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: git-version
+    attributes:
+      label: Git version
+      placeholder: git version 2.45.0
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Paste stderr/details from the error toast or attach screenshots if helpful.
+      render: text

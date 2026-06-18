@@ -1,0 +1,43 @@
+name: Feature request
+description: Suggest an improvement that fits Mergit's minimal Git client scope.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Mergit intentionally focuses on staging, history, conflict resolution, and safe daily Git workflows.
+        Please explain why this belongs in a minimal Git client.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What daily Git workflow is hard or unsafe today?
+      placeholder: When I need to...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the smallest useful version of the feature.
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope fit
+      options:
+        - label: This is useful for common staging, history, remote, stash, branch, or conflict workflows.
+        - label: This can work with native git commands and does not require a hosted-service account.
+        - label: This does not require Mergit to become a full IDE or project management tool.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workaround or existing Git tool do you use now?
+  - type: textarea
+    id: examples
+    attributes:
+      label: References
+      description: Link examples from other Git clients if they explain the UX clearly.
