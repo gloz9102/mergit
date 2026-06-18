@@ -56,9 +56,29 @@ export function Toolbar() {
     setBookmarkModal(null)
     setPending('open', true)
     try {
+      if (await window.api.focusOpenRepo(b.path)) {
+        addRecentRepo(b.path)
+        return
+      }
       if (newWindow) await window.api.openRepoWindow(b.path)
       else await openRepo(b.path)
       addRecentRepo(b.path)
+    } catch (err) {
+      toastError(err)
+    } finally {
+      setPending('open', false)
+    }
+  }
+
+  async function chooseBookmark(b: BookmarkedRepo): Promise<void> {
+    setOpenMenu(null)
+    setPending('open', true)
+    try {
+      if (await window.api.focusOpenRepo(b.path)) {
+        addRecentRepo(b.path)
+        return
+      }
+      setBookmarkModal(b)
     } catch (err) {
       toastError(err)
     } finally {
@@ -130,8 +150,7 @@ export function Toolbar() {
                 </>
               }
               onClick={() => {
-                setOpenMenu(null)
-                setBookmarkModal(b)
+                void chooseBookmark(b)
               }}
             />
           ))}

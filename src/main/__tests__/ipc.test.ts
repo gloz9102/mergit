@@ -154,4 +154,34 @@ describe('app IPC', () => {
     expect(existingWindow.show).toHaveBeenCalled()
     expect(existingWindow.focus).toHaveBeenCalled()
   })
+
+  it('focusOpenRepo: 이미 열린 저장소면 기존 창을 포커스하고 true를 반환한다', async () => {
+    const dir = makeRepo()
+    const existingWindow = {
+      webContents: { id: 20 },
+      once: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMinimized: vi.fn(() => false),
+      restore: vi.fn(),
+      show: vi.fn(),
+      focus: vi.fn()
+    } as unknown as BrowserWindow
+    electronMock.browserWindow.fromWebContents.mockReturnValue(existingWindow)
+
+    const openRes = (await handler('git:openRepo')({ sender: { id: 20 } }, dir)) as Envelope
+    expect(openRes.ok).toBe(true)
+
+    const focusRes = (await handler('git:focusOpenRepo')({}, `${dir}/.`)) as Envelope
+
+    expect(focusRes).toEqual({ ok: true, data: true })
+    expect(existingWindow.restore).not.toHaveBeenCalled()
+    expect(existingWindow.show).toHaveBeenCalled()
+    expect(existingWindow.focus).toHaveBeenCalled()
+  })
+
+  it('focusOpenRepo: 열린 저장소가 아니면 false를 반환한다', async () => {
+    const res = (await handler('git:focusOpenRepo')({}, '/not/open')) as Envelope
+
+    expect(res).toEqual({ ok: true, data: false })
+  })
 })

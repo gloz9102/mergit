@@ -19,7 +19,13 @@ const sessions = new Map<number, Session>()
 const pendingRepoPaths = new Map<number, string>()
 
 // GitService 자동 매핑에서 제외하고 직접 구현하는 채널
-const CUSTOM_CHANNELS: string[] = ['selectRepo', 'openRepo', 'openRepoWindow', 'initialRepoPath']
+const CUSTOM_CHANNELS: string[] = [
+  'selectRepo',
+  'openRepo',
+  'openRepoWindow',
+  'focusOpenRepo',
+  'initialRepoPath'
+]
 
 function normalizeRepoPath(path: string): string {
   return resolve(path)
@@ -87,6 +93,14 @@ export function registerIpc(createWindow: () => BrowserWindow): void {
       pendingRepoPaths.set(id, path)
       win.once('closed', () => pendingRepoPaths.delete(id))
       return { ok: true, data: null }
+    } catch (err) {
+      return { ok: false, error: toGitError(err) }
+    }
+  })
+
+  ipcMain.handle('git:focusOpenRepo', async (_event, path: string): Promise<Envelope> => {
+    try {
+      return { ok: true, data: focusOpenRepo(path) }
     } catch (err) {
       return { ok: false, error: toGitError(err) }
     }

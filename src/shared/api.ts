@@ -59,6 +59,7 @@ export interface GitApi {
   selectRepo(): Promise<string | null>
   openRepo(path: string): Promise<RepoInfoDto>
   openRepoWindow(path: string): Promise<void>
+  focusOpenRepo(path: string): Promise<boolean>
   initialRepoPath(): Promise<string | null>
   log(skip: number, maxCount: number, options?: HistoryOptions): Promise<CommitDto[]>
   searchCommits(text: string, options?: HistoryOptions): Promise<string[]>
@@ -148,6 +149,7 @@ export const GIT_API_METHODS = [
 type IpcMethods = Exclude<
   keyof GitApi,
   | 'onRepoChanged'
+  | 'focusOpenRepo'
   | 'getAppVersion'
   | 'checkForUpdates'
   | 'downloadUpdate'

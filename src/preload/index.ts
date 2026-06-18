@@ -16,6 +16,8 @@ api['onRepoChanged'] = (cb: () => void) => {
   ipcRenderer.on('repo-changed', listener)
   return () => ipcRenderer.removeListener('repo-changed', listener)
 }
+api['focusOpenRepo'] = (path: string) =>
+  ipcRenderer.invoke('git:focusOpenRepo', path).then((res: Envelope) => unwrap(res))
 
 // app:* 채널 — GIT_API_METHODS 자동 매핑이 아니라 수동 노출
 api['getAppVersion'] = () => ipcRenderer.invoke('app:getAppVersion').then((res: Envelope) => unwrap(res))

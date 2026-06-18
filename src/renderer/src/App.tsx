@@ -12,6 +12,7 @@ import { ResizeHandle } from './components/ResizeHandle'
 import { RightPanel } from './components/RightPanel'
 
 const clamp = (v: number, min: number, max: number): number => Math.min(max, Math.max(min, v))
+const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000
 
 function usePanelWidth(key: string, initial: number): [number, (dx: number, invert?: boolean) => void] {
   const [width, setWidth] = useState(() => {
@@ -35,6 +36,8 @@ export default function App() {
   const refresh = useRepoStore((s) => s.refresh)
   const diffView = useUiStore((s) => s.diffView)
   const appVersion = useUiStore((s) => s.appVersion)
+  const autoCheckForUpdates = useUiStore((s) => s.autoCheckForUpdates)
+  const autoDownloadUpdates = useUiStore((s) => s.autoDownloadUpdates)
   const [leftWidth, resizeLeft] = usePanelWidth('leftPanelWidth', 224)
   const [rightWidth, resizeRight] = usePanelWidth('rightPanelWidth', 320)
 
@@ -60,21 +63,29 @@ export default function App() {
     []
   )
 
-  // 앱 버전 적재 + 설정에 따라 시작 시 1회 업데이트 체크 (자동 체크 실패는 조용히)
+  // 앱 버전 적재
   useEffect(() => {
     void window.api
       .getAppVersion()
       .then((v) => useUiStore.getState().setAppVersion(v))
       .catch(() => {})
-    const ui = useUiStore.getState()
-    if (!ui.autoCheckForUpdates) return
-    void window.api
-      .checkForUpdates({ autoDownload: ui.autoDownloadUpdates })
-      .then((r) => {
-        if (r.hasUpdate) useUiStore.getState().setUpdateState(r)
-      })
-      .catch(() => {})
   }, [])
+
+  // 자동 업데이트 체크: 설정이 켜져 있으면 시작/토글 시 1회, 이후 60분마다 조용히 확인한다.
+  useEffect(() => {
+    if (!autoCheckForUpdates) return
+    function check(): void {
+      void window.api
+        .checkForUpdates({ autoDownload: autoDownloadUpdates })
+        .then((r) => {
+          if (r.hasUpdate) useUiStore.getState().setUpdateState(r)
+        })
+        .catch(() => {})
+    }
+    check()
+    const id = window.setInterval(check, UPDATE_CHECK_INTERVAL_MS)
+    return () => window.clearInterval(id)
+  }, [autoCheckForUpdates, autoDownloadUpdates])
 
   // 창 제목: 저장소명과 앱 버전을 함께 보여준다.
   useEffect(() => {
