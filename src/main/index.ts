@@ -2,6 +2,7 @@ import { app, BrowserWindow, Menu } from 'electron'
 import { join } from 'node:path'
 import icon from '../../resources/icon.png?asset'
 import { registerIpc } from './ipc'
+import { attachQuitConfirmation, resetQuitConfirmation } from './windowLifecycle'
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -21,6 +22,7 @@ function createWindow(): BrowserWindow {
   } else {
     void win.loadFile(join(__dirname, '../renderer/index.html'))
   }
+  attachQuitConfirmation(win)
   return win
 }
 
@@ -29,6 +31,7 @@ function createWindow(): BrowserWindow {
 app.setName('Mergit')
 
 app.whenReady().then(() => {
+  resetQuitConfirmation()
   // Windows/Linux는 창 안에 메뉴바(File/Edit/View...)가 박히므로 제거한다.
   // macOS는 앱 메뉴를 없애면 Cmd+C/V 등 Edit 단축키가 깨질 수 있어 유지.
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
@@ -42,5 +45,6 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  resetQuitConfirmation()
   if (process.platform !== 'darwin') app.quit()
 })

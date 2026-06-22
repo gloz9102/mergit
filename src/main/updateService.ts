@@ -20,7 +20,7 @@ import { isNewer } from '../shared/version'
 const { autoUpdater } = electronUpdater
 
 export const UPDATE_EVENT_CHANNEL = 'update-event'
-export const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000
+export const UPDATE_CHECK_INTERVAL_MS = 20 * 60 * 1000
 const GITHUB_OWNER = 'gloz9102'
 const GITHUB_REPO = 'mergit'
 const RELEASES_LATEST_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`

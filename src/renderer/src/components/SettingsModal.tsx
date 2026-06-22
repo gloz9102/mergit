@@ -5,6 +5,7 @@ import { toastError } from '../lib/run'
 import { useUiStore, type LeftPanelSection } from '../stores/uiStore'
 
 const LIST_LIMIT_PRESETS = [5, 10, 15] as const
+const GITHUB_REPO_URL = 'https://github.com/gloz9102/mergit'
 
 export function SettingsModal() {
   const { t, i18n } = useTranslation()
@@ -115,6 +116,16 @@ export function SettingsModal() {
           <span className="min-w-0 truncate text-right">
             {appVersion ? `Mergit v${appVersion}` : t('update.unknownVersion')}
           </span>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+          <span className="text-zinc-500">{t('settings.githubRepo')}</span>
+          <button
+            onClick={() => void window.api.openExternal(GITHUB_REPO_URL).catch(toastError)}
+            className="min-w-0 truncate rounded px-2 py-1 text-right font-mono text-xs text-emerald-300 hover:bg-zinc-700"
+            title={GITHUB_REPO_URL}
+          >
+            {GITHUB_REPO_URL}
+          </button>
         </div>
         <label className="mt-3 flex items-center gap-2 text-sm text-zinc-300">
           <input

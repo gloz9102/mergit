@@ -79,6 +79,10 @@ describe('UpdateService', () => {
     expect(updater.autoInstallOnAppQuit).toBe(true)
   })
 
+  it('자동 업데이트 체크 주기는 20분이다', () => {
+    expect(UPDATE_CHECK_INTERVAL_MS).toBe(20 * 60 * 1000)
+  })
+
   it('checkForUpdates: 자동 다운로드 옵션을 updater에 반영한다', async () => {
     const { service, updater } = makeService()
 

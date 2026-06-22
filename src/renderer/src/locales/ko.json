@@ -134,6 +134,7 @@
       "custom": "직접입력"
     },
     "alwaysShowCurrentBranch": "현재 브랜치 항상 보임",
+    "githubRepo": "GitHub 저장소",
     "close": "닫기"
   },
   "update": {

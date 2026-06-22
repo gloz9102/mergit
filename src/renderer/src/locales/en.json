@@ -134,6 +134,7 @@
       "custom": "Custom"
     },
     "alwaysShowCurrentBranch": "Always show current branch",
+    "githubRepo": "GitHub repository",
     "close": "Close"
   },
   "update": {
