@@ -54,9 +54,10 @@ export function buildOutput(segments: ConflictSegment[], choices: ConflictChoice
     if (seg.type === 'context') {
       out.push(...seg.lines)
     } else {
-      const choice = choices[ci++] ?? { ours: false, theirs: false }
-      if (choice.ours) out.push(...seg.ours)
-      if (choice.theirs) out.push(...seg.theirs)
+      const choice = choices[ci++] ?? 'unresolved'
+      if (choice === 'unresolved') out.push(...conflictMarkerLines(seg))
+      if (choice === 'ours' || choice === 'both') out.push(...seg.ours)
+      if (choice === 'theirs' || choice === 'both') out.push(...seg.theirs)
     }
   }
   return out.join('\n')
@@ -67,5 +68,37 @@ export function countConflicts(segments: ConflictSegment[]): number {
 }
 
 export function countResolved(choices: ConflictChoice[]): number {
-  return choices.filter((c) => c.ours || c.theirs).length
+  return choices.filter((choice) => choice !== 'unresolved').length
+}
+
+export type ConflictResolutionValidation =
+  | { ok: true }
+  | { ok: false; reason: 'unresolved' | 'markers' }
+
+export function validateConflictResolution(
+  segments: ConflictSegment[],
+  choices: ConflictChoice[],
+  output: string
+): ConflictResolutionValidation {
+  if (countResolved(choices) < countConflicts(segments)) return { ok: false, reason: 'unresolved' }
+  if (hasConflictMarkers(output)) return { ok: false, reason: 'markers' }
+  return { ok: true }
+}
+
+export function hasConflictMarkers(content: string): boolean {
+  return /^(<<<<<<<|=======|>>>>>>>)(?:\s|$|\r$)/m.test(content)
+}
+
+function conflictMarkerLines(seg: Extract<ConflictSegment, { type: 'conflict' }>): string[] {
+  return [
+    marker('<<<<<<<', seg.oursLabel),
+    ...seg.ours,
+    '=======',
+    ...seg.theirs,
+    marker('>>>>>>>', seg.theirsLabel)
+  ]
+}
+
+function marker(prefix: string, label: string): string {
+  return label ? `${prefix} ${label}` : prefix
 }

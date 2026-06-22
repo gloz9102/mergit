@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { RefreshScope } from '../../../shared/api'
 import type {
   BranchDto,
   CommitDto,
@@ -7,6 +8,7 @@ import type {
   StashDto,
   StatusDto
 } from '../../../shared/types'
+import { useUiStore } from './uiStore'
 
 // 한 번에 불러오는 커밋 수 — 그래프 무한 스크롤의 페이지 단위
 export const PAGE_SIZE = 500
@@ -15,11 +17,10 @@ export const DEFAULT_HISTORY_OPTIONS: HistoryOptions = {
   all: false
 }
 
-export interface RefreshScope {
-  history?: boolean
-  branches?: boolean
-  status?: boolean
-  stashes?: boolean
+export type { RefreshScope }
+
+export interface RefreshOptions {
+  trailing?: boolean
 }
 
 type NormalizedRefreshScope = Required<RefreshScope>
@@ -30,12 +31,13 @@ interface RepoState {
   branches: BranchDto[]
   status: StatusDto | null
   stashes: StashDto[]
+  repoGeneration: number
   historyVersion: number
   historyOptions: HistoryOptions
   hasMoreCommits: boolean
   loadingMore: boolean
   openRepo(path: string): Promise<void>
-  refresh(scope?: RefreshScope): Promise<void>
+  refresh(scope?: RefreshScope, options?: RefreshOptions): Promise<void>
   loadMore(): Promise<void>
   setHistoryOptions(options: Partial<HistoryOptions>): Promise<void>
 }
@@ -53,7 +55,10 @@ let refreshRunning = false
 let refreshScheduled = false
 let activeScope: NormalizedRefreshScope | null = null
 let activeHistoryOptionsKey: string | null = null
+let activeGeneration: number | null = null
 let activePromise: Promise<void> | null = null
+let queuedGeneration: number | null = null
+let openRepoRequestId = 0
 
 function normalizeScope(scope?: RefreshScope): NormalizedRefreshScope {
   if (!scope) return { ...FULL_REFRESH }
@@ -98,18 +103,21 @@ function historyOptionsKey(options: HistoryOptions): string {
   return `${options.order}:${options.all ? 'all' : 'current'}`
 }
 
-async function drainRefreshQueue(refreshOnce: (scope: NormalizedRefreshScope) => Promise<void>): Promise<void> {
+async function drainRefreshQueue(refreshOnce: (scope: NormalizedRefreshScope, generation: number) => Promise<void>): Promise<void> {
   if (refreshRunning) return
   refreshRunning = true
   refreshScheduled = false
   while (queuedScope) {
     const scope = queuedScope
+    const generation = queuedGeneration ?? useRepoStore.getState().repoGeneration
     const resolvers = queuedResolvers
     queuedScope = null
+    queuedGeneration = null
     queuedResolvers = []
     activeScope = scope
     activeHistoryOptionsKey = historyOptionsKey(useRepoStore.getState().historyOptions)
-    activePromise = refreshOnce(scope)
+    activeGeneration = generation
+    activePromise = refreshOnce(scope, generation)
     try {
       await activePromise
       resolvers.forEach(({ resolve }) => resolve())
@@ -118,6 +126,7 @@ async function drainRefreshQueue(refreshOnce: (scope: NormalizedRefreshScope) =>
     } finally {
       activeScope = null
       activeHistoryOptionsKey = null
+      activeGeneration = null
       activePromise = null
     }
   }
@@ -126,13 +135,29 @@ async function drainRefreshQueue(refreshOnce: (scope: NormalizedRefreshScope) =>
 
 function enqueueRefresh(
   scope: NormalizedRefreshScope,
-  refreshOnce: (scope: NormalizedRefreshScope) => Promise<void>
+  refreshOnce: (scope: NormalizedRefreshScope, generation: number) => Promise<void>,
+  options: RefreshOptions = {}
 ): Promise<void> {
+  const generation = useRepoStore.getState().repoGeneration
   const requestedHistoryOptionsKey = historyOptionsKey(useRepoStore.getState().historyOptions)
-  const uncovered = subtractCoveredScope(scope, activeScope, requestedHistoryOptionsKey, activeHistoryOptionsKey)
-  if (activePromise && isEmptyScope(uncovered)) return activePromise
-  if (isEmptyScope(uncovered)) return Promise.resolve()
-  queuedScope = mergeScope(queuedScope, uncovered)
+  const coveredScope = activeGeneration === generation ? activeScope : null
+  const coveredHistoryOptionsKey = activeGeneration === generation ? activeHistoryOptionsKey : null
+  const uncovered = subtractCoveredScope(scope, coveredScope, requestedHistoryOptionsKey, coveredHistoryOptionsKey)
+  const queueScope =
+    activePromise && activeGeneration === generation && isEmptyScope(uncovered) && options.trailing
+      ? scope
+      : uncovered
+  if (activePromise && activeGeneration === generation && isEmptyScope(uncovered) && !options.trailing) {
+    return activePromise
+  }
+  if (isEmptyScope(queueScope)) return Promise.resolve()
+  if (queuedGeneration !== null && queuedGeneration !== generation) {
+    queuedResolvers.forEach(({ resolve }) => resolve())
+    queuedScope = null
+    queuedResolvers = []
+  }
+  queuedGeneration = generation
+  queuedScope = mergeScope(queuedScope, queueScope)
   return new Promise((resolve, reject) => {
     queuedResolvers.push({ resolve, reject })
     if (!refreshScheduled && !refreshRunning) {
@@ -142,25 +167,45 @@ function enqueueRefresh(
   })
 }
 
+function clearQueuedRefreshes(): void {
+  queuedResolvers.forEach(({ resolve }) => resolve())
+  queuedScope = null
+  queuedGeneration = null
+  queuedResolvers = []
+  refreshScheduled = false
+}
+
 export const useRepoStore = create<RepoState>((set, get) => ({
   repo: null,
   commits: [],
   branches: [],
   status: null,
   stashes: [],
+  repoGeneration: 0,
   historyVersion: 0,
   historyOptions: DEFAULT_HISTORY_OPTIONS,
   hasMoreCommits: true,
   loadingMore: false,
 
   async openRepo(path: string) {
-    const repo = await window.api.openRepo(path)
+    const requestId = ++openRepoRequestId
+    let repo: RepoInfoDto
+    try {
+      repo = await window.api.openRepo(path)
+    } catch (err) {
+      if (requestId !== openRepoRequestId) return
+      throw err
+    }
+    if (requestId !== openRepoRequestId) return
+    clearQueuedRefreshes()
+    useUiStore.getState().resetRepoScopedState()
     set({
       repo,
       commits: [],
       branches: [],
       status: null,
       stashes: [],
+      repoGeneration: get().repoGeneration + 1,
       historyVersion: 0,
       historyOptions: get().historyOptions,
       hasMoreCommits: true
@@ -168,10 +213,10 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     await get().refresh()
   },
 
-  async refresh(scope) {
+  async refresh(scope, options) {
     if (!get().repo) return
-    await enqueueRefresh(normalizeScope(scope), async (s) => {
-      if (!get().repo) return
+    await enqueueRefresh(normalizeScope(scope), async (s, requestGeneration) => {
+      if (!get().repo || get().repoGeneration !== requestGeneration) return
       // 현재 로드된 깊이만큼 다시 불러와 스크롤 위치를 보존한다
       const depth = Math.max(PAGE_SIZE, get().commits.length)
       const historyOptions = get().historyOptions
@@ -183,6 +228,9 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         s.stashes ? window.api.stashList() : Promise.resolve(get().stashes)
       ])
       set((state) => ({
+        ...(state.repoGeneration !== requestGeneration
+          ? {}
+          : {
         commits:
           s.history && historyOptionsKey(state.historyOptions) === requestHistoryOptionsKey
             ? commits
@@ -198,18 +246,22 @@ export const useRepoStore = create<RepoState>((set, get) => ({
           s.history && historyOptionsKey(state.historyOptions) === requestHistoryOptionsKey
             ? state.historyVersion + 1
             : state.historyVersion
+          })
       }))
-    })
+    }, options)
   },
 
   async loadMore() {
-    const { repo, loadingMore, hasMoreCommits, commits, historyOptions } = get()
+    const { repo, repoGeneration, loadingMore, hasMoreCommits, commits, historyOptions } = get()
     if (!repo || loadingMore || !hasMoreCommits) return
     const requestHistoryOptionsKey = historyOptionsKey(historyOptions)
     set({ loadingMore: true })
     try {
       const page = await window.api.log(commits.length, PAGE_SIZE, historyOptions)
-      if (historyOptionsKey(get().historyOptions) !== requestHistoryOptionsKey) return
+      if (
+        get().repoGeneration !== repoGeneration ||
+        historyOptionsKey(get().historyOptions) !== requestHistoryOptionsKey
+      ) return
       // 페이지 사이 ref 이동으로 커밋이 경계를 넘을 수 있어 중복을 제거하며 덧붙인다
       const seen = new Set(get().commits.map((c) => c.hash))
       const fresh = page.filter((c) => !seen.has(c.hash))

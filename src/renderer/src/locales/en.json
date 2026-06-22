@@ -87,6 +87,10 @@
     "theirs": "Theirs — {{label}}",
     "output": "Output (editable)",
     "save": "Save & mark resolved",
+    "loadingFile": "Loading file...",
+    "resolveAllBeforeSave": "Resolve every conflict block before saving",
+    "conflictMarkersRemain": "Conflict markers remain in the output",
+    "discardManualConfirm": "Discard manual edits and regenerate from selections?",
     "prev": "Prev conflict",
     "next": "Next conflict"
   },
@@ -171,6 +175,7 @@
     "NOT_A_REPO": "Not a git repository",
     "REMOTE": "Remote operation failed",
     "NO_REPO": "No repository is open",
+    "WATCHER": "Repository watcher failed",
     "UPDATE_FAILED": "Update failed",
     "UPDATE_UNSUPPORTED": "Automatic updates are unavailable in this build"
   },
@@ -188,6 +193,7 @@
     "branchCreated": "Branch created",
     "stashSaved": "Saved to stash",
     "stashedAndCheckedOut": "Saved changes to stash and checked out branch",
+    "stashedCheckoutFailed": "Saved changes to stash, but checkout failed",
     "stashPopped": "Stash popped",
     "resolvedSaved": "Marked as resolved",
     "operationAborted": "Operation aborted"

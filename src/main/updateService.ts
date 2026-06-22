@@ -9,6 +9,7 @@ import electronUpdater, {
 import type {
   UpdateCheckDto,
   UpdateCheckOptions,
+  UpdateCheckSettings,
   UpdateEventDto,
   UpdateProgressDto,
   UpdateStatus
@@ -19,6 +20,7 @@ import { isNewer } from '../shared/version'
 const { autoUpdater } = electronUpdater
 
 export const UPDATE_EVENT_CHANNEL = 'update-event'
+export const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000
 const GITHUB_OWNER = 'gloz9102'
 const GITHUB_REPO = 'mergit'
 const RELEASES_LATEST_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`
@@ -53,6 +55,9 @@ export class UpdateService {
   private readonly platform: NodeJS.Platform
   private checkPromise: Promise<UpdateCheckDto> | null = null
   private downloadPromise: Promise<void> | null = null
+  private schedulerTimer: ReturnType<typeof setInterval> | null = null
+  private schedulerSettings: UpdateCheckSettings | null = null
+  private currentState: UpdateEventDto
   private latestInfo: UpdateInfo | null = null
   private downloaded = false
 
@@ -63,8 +68,33 @@ export class UpdateService {
     this.isPackaged = options.isPackaged ?? (() => app.isPackaged)
     this.fetchImpl = options.fetchImpl ?? fetch
     this.platform = options.platform ?? process.platform
+    this.currentState = { status: 'idle', currentVersion: this.getVersion() }
     this.updater.autoInstallOnAppQuit = true
     this.attachUpdaterEvents()
+  }
+
+  getState(): UpdateEventDto {
+    return this.currentState
+  }
+
+  configureUpdateChecks(settings: UpdateCheckSettings): UpdateEventDto {
+    if (
+      this.schedulerSettings?.autoCheck === settings.autoCheck &&
+      this.schedulerSettings.autoDownload === settings.autoDownload
+    ) {
+      return this.currentState
+    }
+    this.schedulerSettings = { ...settings }
+    if (this.schedulerTimer) clearInterval(this.schedulerTimer)
+    this.schedulerTimer = null
+    if (settings.autoCheck) {
+      this.runScheduledCheck(settings.autoDownload)
+      this.schedulerTimer = setInterval(
+        () => this.runScheduledCheck(settings.autoDownload),
+        UPDATE_CHECK_INTERVAL_MS
+      )
+    }
+    return this.currentState
   }
 
   checkForUpdates(options: UpdateCheckOptions = { autoDownload: false }): Promise<UpdateCheckDto> {
@@ -113,7 +143,6 @@ export class UpdateService {
 
   private async doCheckForUpdates(options: UpdateCheckOptions): Promise<UpdateCheckDto> {
     const autoDownload = !!options.autoDownload
-    this.downloaded = false
     this.broadcast({ status: 'checking', currentVersion: this.getVersion() })
     if (!this.canUseUpdater()) {
       return this.checkGitHubLatest('unsupported', 'Automatic update is unavailable in this build.')
@@ -126,13 +155,26 @@ export class UpdateService {
         return this.unsupportedDto('Updater is disabled for this build.')
       }
       this.trackAutoDownload(result)
+      const keepDownloaded =
+        this.downloaded &&
+        this.latestInfo?.version === result.updateInfo.version &&
+        result.isUpdateAvailable
       this.latestInfo = result.isUpdateAvailable ? result.updateInfo : null
-      return this.toCheckDto(
+      const dto = this.toCheckDto(
         result.updateInfo,
         result.isUpdateAvailable,
-        result.isUpdateAvailable ? 'available' : 'not-available',
+        keepDownloaded ? 'downloaded' : result.isUpdateAvailable ? 'available' : 'not-available',
         result.isUpdateAvailable
       )
+      this.broadcast({
+        status: dto.status,
+        currentVersion: dto.currentVersion,
+        latestVersion: dto.latestVersion,
+        hasUpdate: dto.hasUpdate,
+        releaseUrl: dto.releaseUrl,
+        canDownload: dto.canDownload
+      })
+      return dto
     } catch (err) {
       this.broadcastError(err)
       throw err
@@ -159,6 +201,7 @@ export class UpdateService {
     })
     this.updater.on('update-not-available', (info) => {
       this.latestInfo = null
+      this.downloaded = false
       this.broadcast(this.toEvent(info, 'not-available', false, false))
     })
     this.updater.on('download-progress', (progress) => {
@@ -274,7 +317,11 @@ export class UpdateService {
   }
 
   private canUseUpdater(): boolean {
-    return this.isPackaged() && (this.platform === 'win32' || this.platform === 'darwin')
+    return this.isPackaged() && this.platform === 'win32'
+  }
+
+  private runScheduledCheck(autoDownload: boolean): void {
+    void this.checkForUpdates({ autoDownload }).catch(() => {})
   }
 
   private broadcastError(err: unknown, message?: string): void {
@@ -288,6 +335,7 @@ export class UpdateService {
   }
 
   private broadcast(event: UpdateEventDto): void {
+    this.currentState = event
     for (const win of this.getWindows()) {
       if (win.isDestroyed()) continue
       win.webContents.send(UPDATE_EVENT_CHANNEL, event)

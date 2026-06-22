@@ -1,6 +1,7 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { FileStatusDto } from '../../../shared/types'
+import { useLatestDiff, workingDiffTargetKey } from '../lib/useLatestDiff'
 import { splitPath } from '../lib/paths'
 import { run, toastError } from '../lib/run'
 import { useRepoStore } from '../stores/repoStore'
@@ -13,6 +14,7 @@ export function StagingPanel() {
   const ask = useUiStore((s) => s.ask)
   const diffView = useUiStore((s) => s.diffView)
   const openDiff = useUiStore((s) => s.openDiff)
+  const { showDiff: showLatestDiff, clearDiff } = useLatestDiff()
   const [message, setMessage] = useState('')
   const [amend, setAmend] = useState(false)
   // amend 체크 전에 작성하던 메시지 — 체크 해제 시 복원
@@ -31,14 +33,12 @@ export function StagingPanel() {
 
   // diff는 중앙 영역(DiffPanel)에 크게 표시한다
   const showDiff = useCallback(async (file: FileStatusDto, fromStaged: boolean): Promise<void> => {
-    try {
-      const text = await window.api.diffWorkingFile(file.path, fromStaged)
-      openDiff({ title: file.path, text })
-    } catch (err) {
-      toastError(err)
-    }
-  }, [openDiff])
-  const clearDiff = useCallback(() => openDiff(null), [openDiff])
+    await showLatestDiff({
+      key: workingDiffTargetKey(file.path, fromStaged),
+      title: file.path,
+      load: () => window.api.diffWorkingFile(file.path, fromStaged)
+    })
+  }, [showLatestDiff])
 
   if (!status) return null
   const canAmend = commits.length > 0 && status.operation === null
@@ -88,7 +88,7 @@ export function StagingPanel() {
       <FileList
         files={unstaged}
         fromStaged={false}
-        activeDiffTitle={diffView?.title ?? null}
+        activeDiffTargetKey={diffView?.targetKey ?? null}
         onShowDiff={showDiff}
         onClearDiff={clearDiff}
         onAsk={ask}
@@ -99,7 +99,7 @@ export function StagingPanel() {
       <FileList
         files={staged}
         fromStaged
-        activeDiffTitle={diffView?.title ?? null}
+        activeDiffTargetKey={diffView?.targetKey ?? null}
         onShowDiff={showDiff}
         onClearDiff={clearDiff}
         onAsk={ask}
@@ -137,14 +137,14 @@ export function StagingPanel() {
 const FileList = memo(function FileList({
   files,
   fromStaged,
-  activeDiffTitle,
+  activeDiffTargetKey,
   onShowDiff,
   onClearDiff,
   onAsk
 }: {
   files: FileStatusDto[]
   fromStaged: boolean
-  activeDiffTitle: string | null
+  activeDiffTargetKey: string | null
   onShowDiff: (file: FileStatusDto, fromStaged: boolean) => Promise<void>
   onClearDiff: () => void
   onAsk: (message: string, onConfirm: () => void) => void
@@ -153,13 +153,14 @@ const FileList = memo(function FileList({
 
   function fileRow(file: FileStatusDto) {
     const { dir, base } = splitPath(file.path)
+    const targetKey = workingDiffTargetKey(file.path, fromStaged)
     return (
       <div key={file.path} className="group flex items-center gap-1 rounded px-1 hover:bg-zinc-800">
         <button
           title={file.path}
           onClick={() => void onShowDiff(file, fromStaged)}
           className={`flex min-w-0 flex-1 items-baseline gap-1.5 rounded text-left font-mono text-xs ${
-            activeDiffTitle === file.path ? 'bg-zinc-700' : ''
+            activeDiffTargetKey === targetKey ? 'bg-zinc-700' : ''
           }`}
         >
           <span className="shrink-0 text-amber-400">

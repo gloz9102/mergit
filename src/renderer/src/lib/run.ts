@@ -26,7 +26,7 @@ export async function run(
     toastError(err)
   } finally {
     // refresh까지 끝나야 화면이 최신이므로 그 뒤에 진행 표시를 끈다
-    await useRepoStore.getState().refresh(refreshScope).catch(() => {})
+    await useRepoStore.getState().refresh(refreshScope).catch(toastError)
     if (busyKey) useUiStore.getState().setPending(busyKey, false)
   }
 }

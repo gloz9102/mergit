@@ -52,46 +52,29 @@ jobs:
       - name: Package Windows artifacts
         run: npx electron-builder --win --x64 --publish never
 
+      - name: Validate Windows updater metadata
+        shell: pwsh
+        run: |
+          if (!(Test-Path "release/latest.yml")) {
+            throw "Missing release/latest.yml required by electron-updater"
+          }
+          if (-not (Get-ChildItem "release" -Filter "*.exe.blockmap")) {
+            throw "Missing Windows blockmap required by electron-updater"
+          }
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: release/*.exe
-          if-no-files-found: error
-
-  build-macos:
-    needs: validate
-    runs-on: macos-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build renderer and main bundles
-        run: npm run build
-
-      - name: Package macOS artifact
-        run: npx electron-builder --mac --arm64 --publish never
-
-      - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos
-          path: release/*.dmg
+          path: |
+            release/*.exe
+            release/*.exe.blockmap
+            release/latest.yml
           if-no-files-found: error
 
   publish:
     needs:
       - build-windows
-      - build-macos
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
@@ -104,7 +87,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" artifacts/**/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "Mergit $RELEASE_TAG" \
-            --generate-notes
+          mapfile -d '' files < <(find artifacts -type f -print0)
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${files[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Mergit $RELEASE_TAG" \
+              --latest
+          else
+            gh release create "$RELEASE_TAG" "${files[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Mergit $RELEASE_TAG" \
+              --generate-notes
+          fi

@@ -1,12 +1,19 @@
 import { create } from 'zustand'
 import type { UpdateEventDto } from '../../../shared/api'
 
-export type Selection = { type: 'commit'; hash: string } | { type: 'wip' } | { type: 'stash'; index: number } | null
+export type Selection = { type: 'commit'; hash: string } | { type: 'wip' } | { type: 'stash'; oid: string } | null
 
 // 중앙 영역에 크게 표시되는 diff (그래프를 잠시 대체)
 export interface DiffView {
   title: string // 파일 경로
   text: string
+  targetKey?: string
+}
+
+export interface DiffRequest {
+  id: number
+  repoGeneration: number
+  targetKey: string
 }
 
 // 좌측 브랜치 패널의 입력 모드 — filter: 목록 좁힘, search: 하이라이트만. 동시에 하나만 활성.
@@ -57,10 +64,14 @@ interface UiState {
   leftPanelListLimits: LeftPanelListLimits
   alwaysShowCurrentBranch: boolean
   diffView: DiffView | null
+  diffRequest: DiffRequest | null
   branchQuery: BranchQuery | null
   commitQuery: CommitQuery | null
   select(sel: Selection): void
   openDiff(view: DiffView | null): void
+  beginDiffRequest(repoGeneration: number, targetKey: string): DiffRequest
+  openDiffForRequest(request: DiffRequest, view: DiffView): void
+  finishDiffRequest(request: DiffRequest): boolean
   startFilter(initial: string): void
   startSearch(): void
   setBranchQueryText(text: string): void
@@ -74,6 +85,7 @@ interface UiState {
   dismissToast(id: number): void
   ask(message: string, onConfirm: () => void): void
   closeConfirm(): void
+  resetRepoScopedState(): void
   setPending(key: string, value: boolean): void
   setAppVersion(version: string): void
   setAutoCheckForUpdates(value: boolean): void
@@ -86,6 +98,7 @@ interface UiState {
 }
 
 let toastId = 0
+let diffRequestId = 0
 const BRANCH_CHECKOUT_GESTURE_KEY = 'branchCheckoutGesture'
 const LEFT_PANEL_LIST_LIMITS_KEY = 'leftPanelListLimits'
 const ALWAYS_SHOW_CURRENT_BRANCH_KEY = 'alwaysShowCurrentBranch'
@@ -137,6 +150,14 @@ function hasLocalStorage(): boolean {
   )
 }
 
+function sameDiffRequest(a: DiffRequest | null, b: DiffRequest): boolean {
+  return (
+    a?.id === b.id &&
+    a.repoGeneration === b.repoGeneration &&
+    a.targetKey === b.targetKey
+  )
+}
+
 function validLimit(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 1
     ? Math.floor(value)
@@ -159,13 +180,34 @@ export const useUiStore = create<UiState>((set) => ({
   leftPanelListLimits: loadLeftPanelListLimits(),
   alwaysShowCurrentBranch: loadAlwaysShowCurrentBranch(),
   diffView: null,
+  diffRequest: null,
 
   branchQuery: null,
   commitQuery: null,
 
   // 선택이 바뀌면 보고 있던 diff는 의미가 없어지므로 함께 닫는다
-  select: (selected) => set({ selected, diffView: null }),
-  openDiff: (diffView) => set({ diffView }),
+  select: (selected) => set({ selected, diffView: null, diffRequest: null }),
+  openDiff: (diffView) => set({ diffView, diffRequest: null }),
+  beginDiffRequest: (repoGeneration, targetKey) => {
+    const request = { id: ++diffRequestId, repoGeneration, targetKey }
+    set({ diffRequest: request })
+    return request
+  },
+  openDiffForRequest: (request, diffView) =>
+    set((s) =>
+      sameDiffRequest(s.diffRequest, request)
+        ? { diffView: { ...diffView, targetKey: diffView.targetKey ?? request.targetKey }, diffRequest: null }
+        : {}
+    ),
+  finishDiffRequest: (request) => {
+    let matched = false
+    set((s) => {
+      if (!sameDiffRequest(s.diffRequest, request)) return {}
+      matched = true
+      return { diffRequest: null }
+    })
+    return matched
+  },
 
   // 브랜치/커밋 검색은 상호 배타 — autoFocus 인풋이 동시에 두 개 열리는 것을 막는다
   startFilter: (initial) => set({ branchQuery: { mode: 'filter', text: initial }, commitQuery: null }),
@@ -195,6 +237,17 @@ export const useUiStore = create<UiState>((set) => ({
 
   ask: (message, onConfirm) => set({ confirm: { message, onConfirm } }),
   closeConfirm: () => set({ confirm: null }),
+  resetRepoScopedState: () =>
+    set({
+      selected: null,
+      conflictFile: null,
+      diffView: null,
+      diffRequest: null,
+      branchQuery: null,
+      commitQuery: null,
+      confirm: null,
+      pending: {}
+    }),
 
   setPending: (key, value) => set((s) => ({ pending: { ...s.pending, [key]: value } })),
   setAppVersion: (appVersion) => set({ appVersion }),

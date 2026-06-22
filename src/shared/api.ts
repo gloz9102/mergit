@@ -4,6 +4,7 @@ import type {
   CommitFileDto,
   HistoryOptions,
   RepoInfoDto,
+  StashCheckoutResult,
   StashDto,
   StatusDto
 } from './types'
@@ -33,6 +34,11 @@ export interface UpdateCheckOptions {
   autoDownload: boolean
 }
 
+export interface UpdateCheckSettings {
+  autoCheck: boolean
+  autoDownload: boolean
+}
+
 export interface UpdateEventDto {
   status: UpdateStatus
   currentVersion?: string
@@ -53,6 +59,18 @@ export interface UpdateCheckDto {
   canDownload: boolean
   status: UpdateStatus
   message?: string
+}
+
+export interface RepoWatchErrorDto {
+  message: string
+  detail: string
+}
+
+export interface RefreshScope {
+  history?: boolean
+  branches?: boolean
+  status?: boolean
+  stashes?: boolean
 }
 
 export interface GitApi {
@@ -76,7 +94,7 @@ export interface GitApi {
   undoLastCommit(): Promise<void>
   createBranch(name: string, checkout: boolean): Promise<void>
   checkoutBranch(name: string): Promise<void>
-  stashAndCheckoutBranch(name: string, paths?: string[]): Promise<void>
+  stashAndCheckoutBranch(name: string, paths?: string[]): Promise<StashCheckoutResult>
   deleteBranch(name: string, force: boolean): Promise<void>
   renameBranch(oldName: string, newName: string): Promise<void>
   merge(branch: string): Promise<{ conflicts: boolean }>
@@ -89,16 +107,19 @@ export interface GitApi {
   fetch(): Promise<void>
   stashSave(message: string, paths?: string[]): Promise<void>
   stashList(): Promise<StashDto[]>
-  stashFiles(index: number): Promise<CommitFileDto[]>
-  stashApply(index: number): Promise<void>
-  stashPop(index: number): Promise<void>
-  stashDrop(index: number): Promise<void>
+  stashFiles(oid: string): Promise<CommitFileDto[]>
+  stashApply(oid: string): Promise<void>
+  stashPop(oid: string): Promise<void>
+  stashDrop(oid: string): Promise<void>
   readWorkingFile(path: string): Promise<string>
   saveResolved(path: string, content: string): Promise<void>
-  onRepoChanged(cb: () => void): () => void
+  onRepoChanged(cb: (scope?: RefreshScope) => void): () => void
+  onRepoWatchError(cb: (error: RepoWatchErrorDto) => void): () => void
   // app:* 채널 — git 세션 불필요, preload에서 수동 노출(GIT_API_METHODS 미포함)
   getAppVersion(): Promise<string>
   checkForUpdates(options?: UpdateCheckOptions): Promise<UpdateCheckDto>
+  configureUpdateChecks(settings: UpdateCheckSettings): Promise<UpdateEventDto>
+  getUpdateState(): Promise<UpdateEventDto>
   downloadUpdate(): Promise<void>
   installDownloadedUpdate(): Promise<void>
   onUpdateEvent(cb: (event: UpdateEventDto) => void): () => void
@@ -151,9 +172,12 @@ export const GIT_API_METHODS = [
 type IpcMethods = Exclude<
   keyof GitApi,
   | 'onRepoChanged'
+  | 'onRepoWatchError'
   | 'focusOpenRepo'
   | 'getAppVersion'
   | 'checkForUpdates'
+  | 'configureUpdateChecks'
+  | 'getUpdateState'
   | 'downloadUpdate'
   | 'installDownloadedUpdate'
   | 'onUpdateEvent'

@@ -49,13 +49,22 @@ export interface StatusDto {
 
 export interface StashDto {
   index: number
+  oid: string
   message: string
 }
 
-export interface CommitFileDto {
+export type StashCheckoutResult =
+  | { checkedOut: true; stash: StashDto | null }
+  | { checkedOut: false; stash: StashDto | null; error: string }
+
+export interface FileChangeDto {
+  kind: string // 'A' | 'M' | 'D' | 'R' | 'C' 등 name-status 종류
+  score?: number
   path: string
-  status: string // 'A' | 'M' | 'D' 등 name-status 첫 글자
+  oldPath?: string
 }
+
+export type CommitFileDto = FileChangeDto
 
 export type GitErrorCode =
   | 'GIT_ERROR'
@@ -85,7 +94,4 @@ export type ConflictSegment =
       theirsLabel: string
     }
 
-export interface ConflictChoice {
-  ours: boolean
-  theirs: boolean
-}
+export type ConflictChoice = 'unresolved' | 'ours' | 'theirs' | 'both'

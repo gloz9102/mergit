@@ -1,5 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { GIT_API_METHODS, type Envelope, type UpdateCheckOptions, type UpdateEventDto } from '../shared/api'
+import {
+  GIT_API_METHODS,
+  type Envelope,
+  type RepoWatchErrorDto,
+  type RefreshScope,
+  type UpdateCheckOptions,
+  type UpdateCheckSettings,
+  type UpdateEventDto
+} from '../shared/api'
 
 function unwrap(res: Envelope): unknown {
   if (res.ok) return res.data
@@ -11,10 +19,15 @@ for (const method of GIT_API_METHODS) {
   api[method] = (...args: unknown[]) =>
     ipcRenderer.invoke(`git:${method}`, ...args).then((res: Envelope) => unwrap(res))
 }
-api['onRepoChanged'] = (cb: () => void) => {
-  const listener = (): void => cb()
+api['onRepoChanged'] = (cb: (scope?: RefreshScope) => void) => {
+  const listener = (_event: Electron.IpcRendererEvent, scope?: RefreshScope): void => cb(scope)
   ipcRenderer.on('repo-changed', listener)
   return () => ipcRenderer.removeListener('repo-changed', listener)
+}
+api['onRepoWatchError'] = (cb: (error: RepoWatchErrorDto) => void) => {
+  const listener = (_event: Electron.IpcRendererEvent, error: RepoWatchErrorDto): void => cb(error)
+  ipcRenderer.on('repo-watch-error', listener)
+  return () => ipcRenderer.removeListener('repo-watch-error', listener)
 }
 api['focusOpenRepo'] = (path: string) =>
   ipcRenderer.invoke('git:focusOpenRepo', path).then((res: Envelope) => unwrap(res))
@@ -23,6 +36,10 @@ api['focusOpenRepo'] = (path: string) =>
 api['getAppVersion'] = () => ipcRenderer.invoke('app:getAppVersion').then((res: Envelope) => unwrap(res))
 api['checkForUpdates'] = (options?: UpdateCheckOptions) =>
   ipcRenderer.invoke('app:checkForUpdates', options).then((res: Envelope) => unwrap(res))
+api['configureUpdateChecks'] = (settings: UpdateCheckSettings) =>
+  ipcRenderer.invoke('app:configureUpdateChecks', settings).then((res: Envelope) => unwrap(res))
+api['getUpdateState'] = () =>
+  ipcRenderer.invoke('app:getUpdateState').then((res: Envelope) => unwrap(res))
 api['downloadUpdate'] = () =>
   ipcRenderer.invoke('app:downloadUpdate').then((res: Envelope) => unwrap(res))
 api['installDownloadedUpdate'] = () =>

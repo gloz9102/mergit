@@ -16,7 +16,7 @@ export function RightPanel() {
       {selected?.type === 'commit' ? (
         <CommitDetail hash={selected.hash} />
       ) : selected?.type === 'stash' ? (
-        <StashDetail index={selected.index} />
+        <StashDetail oid={selected.oid} />
       ) : selected?.type === 'wip' && hasWip ? (
         <StagingPanel />
       ) : (

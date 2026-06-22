@@ -107,8 +107,7 @@ export function LeftPanel() {
   const noMatch = branchQuery?.mode === 'filter' && locals.length + remotes.length === 0
 
   async function checkout(branch: BranchDto): Promise<void> {
-    // 원격 브랜치는 프리픽스를 떼고 git의 DWIM 추적 브랜치 생성을 활용
-    const name = branch.isRemote ? branch.name.split('/').slice(1).join('/') : branch.name
+    const name = branch.name
     setPending('checkout', true)
     try {
       await window.api.checkoutBranch(name)
@@ -131,8 +130,15 @@ export function LeftPanel() {
     setCheckoutBlocked(null)
     setPending('checkout', true)
     try {
-      await window.api.stashAndCheckoutBranch(target, paths)
-      pushToast(t('toast.stashedAndCheckedOut'))
+      const result = await window.api.stashAndCheckoutBranch(target, paths)
+      if (result.checkedOut) {
+        pushToast(t('toast.stashedAndCheckedOut'))
+      } else {
+        pushToast(
+          t('toast.stashedCheckoutFailed'),
+          result.stash ? `${result.stash.message}\n${result.error}` : result.error
+        )
+      }
       await refresh()
     } catch (err) {
       toastError(err)
@@ -285,10 +291,10 @@ export function LeftPanel() {
         <>
         {limitedStashes.visible.map((stash) => (
         <button
-          key={stash.index}
-          onClick={() => select({ type: 'stash', index: stash.index })}
+          key={stash.oid}
+          onClick={() => select({ type: 'stash', oid: stash.oid })}
           className={`block w-full truncate rounded px-1 py-0.5 text-left text-sm hover:bg-zinc-800 ${
-            selected?.type === 'stash' && selected.index === stash.index ? 'bg-zinc-700' : ''
+            selected?.type === 'stash' && selected.oid === stash.oid ? 'bg-zinc-700' : ''
           }`}
         >
           {stash.message}

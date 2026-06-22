@@ -1,11 +1,28 @@
 import type { GitErrorCode, GitErrorDto } from '../../shared/types'
 
+export class GitServiceError extends Error {
+  constructor(
+    message: string,
+    readonly code: GitErrorCode = 'GIT_ERROR',
+    readonly paths?: string[]
+  ) {
+    super(message)
+    this.name = 'GitServiceError'
+  }
+}
+
 const CHECKOUT_BLOCKED_HEADERS = [
   /Your local changes to the following files would be overwritten by (?:checkout|switch):/i,
   /The following untracked working tree files would be overwritten by (?:checkout|switch):/i
 ]
 
 export function toGitError(err: unknown): GitErrorDto {
+  if (err instanceof GitServiceError) {
+    const detail = err.message
+    const error: GitErrorDto = { code: err.code, message: detail.split('\n')[0], detail }
+    if (err.paths) error.paths = err.paths
+    return error
+  }
   const detail = err instanceof Error ? err.message : String(err)
   const message = detail.split('\n')[0]
   let code: GitErrorCode = 'GIT_ERROR'

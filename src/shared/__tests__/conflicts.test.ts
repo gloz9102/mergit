@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildOutput, parseConflicts } from '../conflicts'
+import {
+  buildOutput,
+  hasConflictMarkers,
+  parseConflicts,
+  validateConflictResolution
+} from '../conflicts'
 
 const SIMPLE = `line1
 <<<<<<< HEAD
@@ -87,16 +92,46 @@ describe('buildOutput', () => {
   const segs = parseConflicts(SIMPLE)
 
   it('ours만 선택', () => {
-    expect(buildOutput(segs, [{ ours: true, theirs: false }])).toBe('line1\nours line\nline2\n')
+    expect(buildOutput(segs, ['ours'])).toBe('line1\nours line\nline2\n')
   })
 
   it('둘 다 선택하면 ours → theirs 순서로 포함', () => {
-    expect(buildOutput(segs, [{ ours: true, theirs: true }])).toBe(
+    expect(buildOutput(segs, ['both'])).toBe(
       'line1\nours line\ntheirs line\nline2\n'
     )
   })
 
-  it('미선택 블록은 비워 둔다', () => {
-    expect(buildOutput(segs, [{ ours: false, theirs: false }])).toBe('line1\nline2\n')
+  it('미해결 블록은 삭제하지 않고 conflict marker를 보존한다', () => {
+    expect(buildOutput(segs, ['unresolved'])).toBe(SIMPLE)
+  })
+})
+
+describe('validateConflictResolution', () => {
+  const segs = parseConflicts(SIMPLE)
+
+  it('미해결 block은 저장할 수 없다', () => {
+    const output = buildOutput(segs, ['unresolved'])
+    expect(validateConflictResolution(segs, ['unresolved'], output)).toEqual({
+      ok: false,
+      reason: 'unresolved'
+    })
+  })
+
+  it('conflict marker가 남은 output은 저장할 수 없다', () => {
+    expect(validateConflictResolution(segs, ['ours'], SIMPLE)).toEqual({
+      ok: false,
+      reason: 'markers'
+    })
+  })
+
+  it('모든 block이 해결되고 marker가 없으면 저장할 수 있다', () => {
+    expect(validateConflictResolution(segs, ['ours'], buildOutput(segs, ['ours']))).toEqual({
+      ok: true
+    })
+  })
+
+  it('conflict marker를 감지한다', () => {
+    expect(hasConflictMarkers(SIMPLE)).toBe(true)
+    expect(hasConflictMarkers('line1\nours line\nline2\n')).toBe(false)
   })
 })

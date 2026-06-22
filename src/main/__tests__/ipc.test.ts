@@ -184,4 +184,24 @@ describe('app IPC', () => {
 
     expect(res).toEqual({ ok: true, data: false })
   })
+
+  it('openRepo: watcher 오류를 renderer 진단 이벤트로 전달한다', async () => {
+    const dir = makeRepo()
+    const send = vi.fn()
+    const win = {
+      webContents: { id: 30, send },
+      once: vi.fn(),
+      isDestroyed: vi.fn(() => false)
+    } as unknown as BrowserWindow
+    electronMock.browserWindow.fromWebContents.mockReturnValue(win)
+
+    const openRes = (await handler('git:openRepo')({ sender: { id: 30 } }, dir)) as Envelope
+    const onError = repoWatcherMock.start.mock.calls.at(-1)?.[2] as ((err: unknown) => void) | undefined
+    expect(openRes.ok).toBe(true)
+    expect(onError).toBeDefined()
+
+    onError?.({ message: 'watch failed', detail: 'boom' })
+
+    expect(send).toHaveBeenCalledWith('repo-watch-error', { message: 'watch failed', detail: 'boom' })
+  })
 })

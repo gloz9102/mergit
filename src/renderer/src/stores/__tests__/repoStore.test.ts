@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StatusDto } from '../../../../shared/types'
+import type { CommitDto, RepoInfoDto, StatusDto } from '../../../../shared/types'
+import { useUiStore } from '../uiStore'
 import { DEFAULT_HISTORY_OPTIONS, useRepoStore } from '../repoStore'
 
 const status: StatusDto = {
@@ -14,6 +15,7 @@ const status: StatusDto = {
 
 function installApi() {
   const api = {
+    openRepo: vi.fn(),
     log: vi.fn().mockResolvedValue([]),
     branches: vi.fn().mockResolvedValue([]),
     status: vi.fn().mockResolvedValue(status),
@@ -35,7 +37,17 @@ describe('repoStore.refresh', () => {
       historyVersion: 0,
       historyOptions: DEFAULT_HISTORY_OPTIONS,
       hasMoreCommits: true,
-      loadingMore: false
+      loadingMore: false,
+      repoGeneration: 0
+    })
+    useUiStore.setState({
+      selected: null,
+      conflictFile: null,
+      diffView: null,
+      diffRequest: null,
+      branchQuery: null,
+      commitQuery: null,
+      pending: {}
     })
   })
 
@@ -91,6 +103,22 @@ describe('repoStore.refresh', () => {
     expect(api.status).toHaveBeenCalledTimes(1)
   })
 
+  it('trailing refresh는 진행 중인 같은 scope refresh 뒤에 한 번 더 실행된다', async () => {
+    const api = installApi()
+    const firstStatus = deferred<StatusDto>()
+    api.status.mockReturnValueOnce(firstStatus.promise).mockResolvedValue(status)
+
+    const first = useRepoStore.getState().refresh({ status: true })
+    await Promise.resolve()
+    const trailing = useRepoStore.getState().refresh({ status: true }, { trailing: true })
+    expect(api.status).toHaveBeenCalledTimes(1)
+
+    firstStatus.resolve(status)
+    await Promise.all([first, trailing])
+
+    expect(api.status).toHaveBeenCalledTimes(2)
+  })
+
   it('history 옵션 변경은 커밋 목록을 비우고 새 옵션으로 history만 다시 읽는다', async () => {
     const api = installApi()
 
@@ -116,4 +144,66 @@ describe('repoStore.refresh', () => {
 
     expect(api.log).toHaveBeenCalledWith(1, 500, { order: 'date-order', all: true })
   })
+
+  it('openRepo: 늦게 끝난 이전 요청은 최신 저장소 state를 덮지 않는다', async () => {
+    const api = installApi()
+    const first = deferred<RepoInfoDto>()
+    const second = deferred<RepoInfoDto>()
+    api.openRepo.mockImplementation((path: string) => (path === '/repo-a' ? first.promise : second.promise))
+    useUiStore.setState({
+      selected: { type: 'wip' },
+      conflictFile: 'conflicted.txt',
+      diffView: { title: 'old.txt', text: 'old' },
+      diffRequest: { id: 1, repoGeneration: 0, targetKey: 'working:unstaged:old.txt' }
+    })
+
+    const firstOpen = useRepoStore.getState().openRepo('/repo-a')
+    const secondOpen = useRepoStore.getState().openRepo('/repo-b')
+
+    second.resolve({ path: '/repo-b', name: 'repo-b' })
+    await secondOpen
+    expect(useRepoStore.getState().repo?.path).toBe('/repo-b')
+    expect(useUiStore.getState().selected).toBe(null)
+    expect(useUiStore.getState().conflictFile).toBe(null)
+    expect(useUiStore.getState().diffView).toBe(null)
+    expect(useUiStore.getState().diffRequest).toBe(null)
+
+    first.resolve({ path: '/repo-a', name: 'repo-a' })
+    await firstOpen
+    expect(useRepoStore.getState().repo?.path).toBe('/repo-b')
+  })
+
+  it('refresh: repoGeneration이 바뀌면 이전 refresh 결과를 폐기한다', async () => {
+    const api = installApi()
+    const slowLog = deferred<CommitDto[]>()
+    api.log.mockReturnValueOnce(slowLog.promise)
+    useRepoStore.setState({ repoGeneration: 1 })
+
+    const refresh = useRepoStore.getState().refresh({ history: true })
+    await Promise.resolve()
+    useRepoStore.setState({
+      repo: { path: '/repo-b', name: 'repo-b' },
+      repoGeneration: 2,
+      commits: [
+        { hash: 'b', parents: [], author: 'B', email: 'b@test.com', date: '', subject: 'b', body: '', refs: [] }
+      ]
+    })
+    slowLog.resolve([
+      { hash: 'a', parents: [], author: 'A', email: 'a@test.com', date: '', subject: 'a', body: '', refs: [] }
+    ])
+    await refresh
+
+    expect(useRepoStore.getState().commits.map((commit) => commit.hash)).toEqual(['b'])
+  })
 })
+
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+} {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+  return { promise, resolve }
+}

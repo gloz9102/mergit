@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -208,6 +208,30 @@ describe('GitService', () => {
     expect(names).not.toContain('work2')
   })
 
+  it('checkoutBranch: 원격 브랜치는 명시적인 tracking branch로 체크아웃한다', async () => {
+    const dir = makeRepo()
+    const remoteDir = mkdtempSync(join(tmpdir(), 'gkc-remote-'))
+    const git = gitIn(dir)
+    gitIn(remoteDir)('init', '--bare', '-b', 'main')
+    git('remote', 'add', 'origin', remoteDir)
+    git('push', '-u', 'origin', 'main')
+    git('checkout', '-b', 'feature')
+    writeFileSync(join(dir, 'feature.txt'), 'feature\n')
+    git('add', '.')
+    git('commit', '-m', 'feature')
+    git('push', 'origin', 'feature')
+    git('checkout', 'main')
+    git('branch', '-D', 'feature')
+    git('fetch', 'origin')
+    const svc = new GitService(dir)
+
+    await svc.checkoutBranch('origin/feature')
+
+    const status = await svc.status()
+    expect(status.current).toBe('feature')
+    expect(status.tracking).toBe('origin/feature')
+  })
+
   it('checkoutBranch: 대상 브랜치가 로컬 변경을 덮어쓰면 실패한다', async () => {
     const dir = makeCheckoutBlockedRepo()
     const svc = new GitService(dir)
@@ -220,8 +244,10 @@ describe('GitService', () => {
     const dir = makeCheckoutBlockedRepo()
     const svc = new GitService(dir)
 
-    await svc.stashAndCheckoutBranch('feature', ['pnpm-lock.yaml'])
+    const result = await svc.stashAndCheckoutBranch('feature', ['pnpm-lock.yaml'])
 
+    expect(result.checkedOut).toBe(true)
+    expect(result.stash?.oid).toBeDefined()
     const status = await svc.status()
     expect(status.current).toBe('feature')
     expect(status.files.map((f) => f.path)).toEqual(['local-only.txt'])
@@ -233,12 +259,36 @@ describe('GitService', () => {
     const dir = makeCheckoutBlockedRepo()
     const svc = new GitService(dir)
 
-    await svc.stashAndCheckoutBranch('feature')
+    const result = await svc.stashAndCheckoutBranch('feature')
 
+    expect(result.checkedOut).toBe(true)
     const status = await svc.status()
     expect(status.current).toBe('feature')
     expect(status.files).toEqual([])
     expect((await svc.stashList())[0].message).toContain('Mergit checkout: main -> feature')
+  })
+
+  it('stashAndCheckoutBranch: stash 성공 후 checkout 실패를 부분 성공으로 반환한다', async () => {
+    const dir = makeRepo()
+    const git = gitIn(dir)
+    git('checkout', '-b', 'feature')
+    writeFileSync(join(dir, 'blocked.txt'), 'feature file\n')
+    git('add', '.')
+    git('commit', '-m', 'feature file')
+    git('checkout', 'main')
+    writeFileSync(join(dir, 'a.txt'), 'stashed change\n')
+    writeFileSync(join(dir, 'blocked.txt'), 'untracked blocks checkout\n')
+    const svc = new GitService(dir)
+
+    const result = await svc.stashAndCheckoutBranch('feature', ['a.txt'])
+
+    expect(result.checkedOut).toBe(false)
+    if (result.checkedOut) throw new Error('expected checkout to fail after stash')
+    expect(result.stash?.message).toContain('Mergit checkout: main -> feature')
+    expect(result.error).toContain('blocked.txt')
+    expect((await svc.status()).current).toBe('main')
+    const stashes = await svc.stashList()
+    expect(stashes.map((stash) => stash.oid)).toContain(result.stash?.oid)
   })
 
   it('merge 충돌: conflicts=true, status에 충돌 파일과 operation=merge', async () => {
@@ -249,6 +299,18 @@ describe('GitService', () => {
     const status = await svc.status()
     expect(status.conflicted).toContain('a.txt')
     expect(status.operation).toBe('merge')
+  })
+
+  it('status: linked worktree의 Git metadata 경로로 진행 중 작업을 감지한다', async () => {
+    const dir = makeConflictRepo()
+    const linked = mkdtempSync(join(tmpdir(), 'gkc-worktree-'))
+    gitIn(dir)('worktree', 'add', '-b', 'linked-main', linked, 'main')
+    const svc = new GitService(linked)
+
+    const result = await svc.merge('feature')
+
+    expect(result.conflicts).toBe(true)
+    expect((await svc.status()).operation).toBe('merge')
   })
 
   it('충돌 해결: saveResolved → continueOperation 으로 머지를 끝낸다', async () => {
@@ -348,10 +410,17 @@ describe('GitService', () => {
     const list = await svc.stashList()
     expect(list).toHaveLength(1)
     expect(list[0].message).toContain('my wip')
-    await svc.stashApply(0)
+    await svc.stashApply(list[0].oid)
     expect((await svc.status()).files).toHaveLength(1)
-    await svc.stashDrop(0)
+    await svc.stashDrop(list[0].oid)
     expect(await svc.stashList()).toEqual([])
+  })
+
+  it('stashList: Git 실패를 빈 목록으로 숨기지 않는다', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gkc-not-repo-'))
+    const svc = new GitService(dir)
+
+    await expect(svc.stashList()).rejects.toThrow()
   })
 
   it('stashFiles: 스태시에 포함된 파일 목록을 반환한다', async () => {
@@ -361,12 +430,13 @@ describe('GitService', () => {
     const svc = new GitService(dir)
 
     await svc.stashSave('with files')
-    const files = await svc.stashFiles(0)
+    const [stash] = await svc.stashList()
+    const files = await svc.stashFiles(stash.oid)
 
     expect(files).toEqual(
       expect.arrayContaining([
-        { path: 'a.txt', status: 'M' },
-        { path: 'new.txt', status: 'A' }
+        { path: 'a.txt', kind: 'M' },
+        { path: 'new.txt', kind: 'A' }
       ])
     )
   })
@@ -388,7 +458,8 @@ describe('GitService', () => {
     const svc = new GitService(dir)
     await svc.stashSave('untracked')
     expect((await svc.status()).files).toHaveLength(0)
-    await svc.stashPop(0)
+    const [stash] = await svc.stashList()
+    await svc.stashPop(stash.oid)
     expect((await svc.status()).files.map((f) => f.path)).toEqual(['new.txt'])
   })
 
@@ -397,7 +468,8 @@ describe('GitService', () => {
     writeFileSync(join(dir, 'a.txt'), 'wip\n')
     const svc = new GitService(dir)
     await svc.stashSave('wip')
-    await svc.stashPop(0)
+    const [stash] = await svc.stashList()
+    await svc.stashPop(stash.oid)
     expect((await svc.status()).files).toHaveLength(1)
     expect(await svc.stashList()).toEqual([])
   })
@@ -407,19 +479,72 @@ describe('GitService', () => {
     writeFileSync(join(dir, 'a.txt'), 'stashed version\n')
     const svc = new GitService(dir)
     await svc.stashSave('conflicting')
+    const [stash] = await svc.stashList()
     writeFileSync(join(dir, 'a.txt'), 'working version\n')
     await svc.stage(['a.txt'])
-    await expect(svc.stashPop(0)).rejects.toThrow()
+    await expect(svc.stashPop(stash.oid)).rejects.toThrow()
     expect(await svc.stashList()).toHaveLength(1)
     // 충돌 파일이 status에 노출돼 배너로 해결 경로가 열린다
     expect((await svc.status()).conflicted).toContain('a.txt')
   })
 
-  it('push/pull: bare 원격 저장소와 동기화한다', async () => {
+  it('stashPop: index가 바뀌어도 선택한 OID의 스태시만 적용하고 제거한다', async () => {
+    const dir = makeRepo()
+    const svc = new GitService(dir)
+    writeFileSync(join(dir, 'a.txt'), 'older stash\n')
+    await svc.stashSave('older')
+    const older = (await svc.stashList())[0]
+
+    writeFileSync(join(dir, 'newer.txt'), 'newer stash\n')
+    await svc.stashSave('newer')
+
+    await svc.stashPop(older.oid)
+
+    expect(await svc.readWorkingFile('a.txt')).toBe('older stash\n')
+    const remaining = await svc.stashList()
+    expect(remaining).toHaveLength(1)
+    expect(remaining[0].message).toContain('newer')
+    expect(remaining[0].oid).not.toBe(older.oid)
+  })
+
+  it('stashDrop: index가 바뀌어도 선택한 OID의 스태시만 제거한다', async () => {
+    const dir = makeRepo()
+    const svc = new GitService(dir)
+    writeFileSync(join(dir, 'a.txt'), 'drop older\n')
+    await svc.stashSave('drop older')
+    const older = (await svc.stashList())[0]
+
+    writeFileSync(join(dir, 'newer.txt'), 'keep newer\n')
+    await svc.stashSave('keep newer')
+
+    await svc.stashDrop(older.oid)
+
+    const remaining = await svc.stashList()
+    expect(remaining).toHaveLength(1)
+    expect(remaining[0].message).toContain('keep newer')
+    expect(remaining[0].oid).not.toBe(older.oid)
+  })
+
+  it('push: upstream이 없으면 origin을 임의로 선택하지 않는다', async () => {
     const dir = makeRepo()
     const remoteDir = mkdtempSync(join(tmpdir(), 'gkc-remote-'))
     gitIn(remoteDir)('init', '--bare', '-b', 'main')
     gitIn(dir)('remote', 'add', 'origin', remoteDir)
+    const svc = new GitService(dir)
+
+    await expect(svc.push()).rejects.toThrow(/upstream/i)
+  })
+
+  it('push/pull: tracking 원격 저장소와 동기화한다', async () => {
+    const dir = makeRepo()
+    const remoteDir = mkdtempSync(join(tmpdir(), 'gkc-remote-'))
+    gitIn(remoteDir)('init', '--bare', '-b', 'main')
+    const git = gitIn(dir)
+    git('remote', 'add', 'origin', remoteDir)
+    git('push', '-u', 'origin', 'main')
+    writeFileSync(join(dir, 'a.txt'), 'pushed change\n')
+    git('add', '.')
+    git('commit', '-m', 'pushed change')
     const svc = new GitService(dir)
     await svc.push()
     await svc.fetch()
@@ -432,7 +557,7 @@ describe('GitService', () => {
     const svc = new GitService(dir)
     const [head] = await svc.log(0, 100)
     const files = await svc.commitFiles(head.hash)
-    expect(files).toEqual([{ path: 'a.txt', status: 'A' }])
+    expect(files).toEqual([{ path: 'a.txt', kind: 'A' }])
     const diff = await svc.diffCommitFile(head.hash, 'a.txt')
     expect(diff).toContain('+line1')
     writeFileSync(join(dir, 'a.txt'), 'line1\nline2\nline3\n')
@@ -449,6 +574,36 @@ describe('GitService', () => {
 
     expect(diff).toContain('Diff omitted: untracked file is too large')
     expect(diff.length).toBeLessThan(300)
+  })
+
+  it('file API: 저장소 밖 상대 경로와 .git metadata 접근을 거부한다', async () => {
+    const dir = makeRepo()
+    const outside = join(dir, '..', 'outside.txt')
+    writeFileSync(outside, 'outside\n')
+    const svc = new GitService(dir)
+
+    await expect(svc.readWorkingFile('../outside.txt')).rejects.toThrow(/repository/i)
+    await expect(svc.saveResolved('../outside.txt', 'changed\n')).rejects.toThrow(/repository/i)
+    await expect(svc.diffWorkingFile('../outside.txt', false)).rejects.toThrow(/repository/i)
+    await expect(svc.readWorkingFile('.git/config')).rejects.toThrow(/repository/i)
+    expect(readFileSync(outside, 'utf-8')).toBe('outside\n')
+  })
+
+  it('file API: 저장소 밖을 가리키는 symlink는 거부한다', async () => {
+    const dir = makeRepo()
+    const outside = join(dir, '..', 'outside-symlink.txt')
+    const link = join(dir, 'linked-outside.txt')
+    writeFileSync(outside, 'outside\n')
+    try {
+      symlinkSync(outside, link, 'file')
+    } catch {
+      return
+    }
+    const svc = new GitService(dir)
+
+    await expect(svc.readWorkingFile('linked-outside.txt')).rejects.toThrow(/repository/i)
+    await expect(svc.saveResolved('linked-outside.txt', 'changed\n')).rejects.toThrow(/repository/i)
+    expect(readFileSync(outside, 'utf-8')).toBe('outside\n')
   })
 
   it('discard: 수정을 되돌리고 untracked는 삭제한다', async () => {

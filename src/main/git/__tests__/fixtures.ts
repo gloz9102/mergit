@@ -8,14 +8,20 @@ export function gitIn(dir: string) {
     execFileSync('git', args, { cwd: dir, encoding: 'utf-8' })
 }
 
+function configureTestRepo(git: ReturnType<typeof gitIn>): void {
+  git('config', 'user.email', 'test@test.com')
+  git('config', 'user.name', 'Test')
+  git('config', 'commit.gpgsign', 'false')
+  git('config', 'core.autocrlf', 'false')
+  git('config', 'core.eol', 'lf')
+}
+
 // 커밋 1개 있는 기본 저장소
 export function makeRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'gkc-'))
   const git = gitIn(dir)
   git('init', '-b', 'main')
-  git('config', 'user.email', 'test@test.com')
-  git('config', 'user.name', 'Test')
-  git('config', 'commit.gpgsign', 'false')
+  configureTestRepo(git)
   writeFileSync(join(dir, 'a.txt'), 'line1\nline2\n')
   git('add', '.')
   git('commit', '-m', 'initial')
@@ -27,9 +33,7 @@ export function makeRepoWithCommits(n: number): string {
   const dir = mkdtempSync(join(tmpdir(), 'gkc-'))
   const git = gitIn(dir)
   git('init', '-b', 'main')
-  git('config', 'user.email', 'test@test.com')
-  git('config', 'user.name', 'Test')
-  git('config', 'commit.gpgsign', 'false')
+  configureTestRepo(git)
   for (let i = 1; i <= n; i++) {
     writeFileSync(join(dir, 'a.txt'), `v${i}\n`)
     git('add', '.')

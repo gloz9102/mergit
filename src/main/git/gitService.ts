@@ -1,6 +1,5 @@
-import { existsSync } from 'node:fs'
-import { readFile, stat, writeFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { access, readFile, realpath, stat, writeFile } from 'node:fs/promises'
+import { basename, isAbsolute, join, relative, resolve } from 'node:path'
 import { simpleGit, type SimpleGit } from 'simple-git'
 import { LOG_FORMAT, parseLog } from '../../shared/logParser'
 import type {
@@ -9,15 +8,23 @@ import type {
   CommitFileDto,
   HistoryOptions,
   RepoInfoDto,
+  StashCheckoutResult,
   StashDto,
   StatusDto
 } from '../../shared/types'
+import { GitServiceError } from './errors'
+import { parseNameStatus } from './nameStatus'
 
 export const MAX_UNTRACKED_DIFF_BYTES = 512 * 1024
 
 const DEFAULT_HISTORY_OPTIONS: HistoryOptions = {
   order: 'date-order',
   all: true
+}
+
+interface ResolvedWorktreePath {
+  repoRelativePath: string
+  absolutePath: string
 }
 
 export class GitService {
@@ -31,11 +38,6 @@ export class GitService {
     const isRepo = await this.git.checkIsRepo()
     if (!isRepo) throw new Error(`not a git repository: ${this.repoPath}`)
     return { path: this.repoPath, name: basename(this.repoPath) }
-  }
-
-  // .git 디렉토리 안의 상태 파일 존재 여부 (MERGE_HEAD 등)
-  private hasGitFile(name: string): boolean {
-    return existsSync(join(this.repoPath, '.git', name))
   }
 
   async log(skip: number, maxCount: number, options: HistoryOptions = DEFAULT_HISTORY_OPTIONS): Promise<CommitDto[]> {
@@ -75,6 +77,7 @@ export class GitService {
 
   async status(): Promise<StatusDto> {
     const s = await this.git.status()
+    const operation = await this.currentOperation()
     return {
       current: s.current ?? null,
       files: s.files.map((f) => ({
@@ -85,13 +88,7 @@ export class GitService {
       })),
       conflicted: s.conflicted,
       // cherry-pick/revert 충돌 중에는 MERGE_HEAD가 없으므로 우선순위 판정이 안전하다
-      operation: this.hasGitFile('CHERRY_PICK_HEAD')
-        ? 'cherry-pick'
-        : this.hasGitFile('REVERT_HEAD')
-          ? 'revert'
-          : this.hasGitFile('MERGE_HEAD')
-            ? 'merge'
-            : null,
+      operation,
       ahead: s.ahead,
       behind: s.behind,
       tracking: s.tracking ?? null
@@ -117,15 +114,9 @@ export class GitService {
   async commitFiles(hash: string): Promise<CommitFileDto[]> {
     // -m --first-parent: 머지 커밋도 첫 부모 기준 변경 파일을 보여준다
     const raw = await this.git.raw([
-      'diff-tree', '--no-commit-id', '--name-status', '-r', '--root', '-m', '--first-parent', hash
+      'diff-tree', '--no-commit-id', '--name-status', '-z', '-r', '--root', '-m', '--first-parent', hash
     ])
-    return raw
-      .split('\n')
-      .filter(Boolean)
-      .map((line) => {
-        const [status, ...rest] = line.split('\t')
-        return { path: rest.join('\t'), status: status[0] }
-      })
+    return parseNameStatus(raw)
   }
 
   async diffCommitFile(hash: string, path: string): Promise<string> {
@@ -133,22 +124,23 @@ export class GitService {
   }
 
   async diffWorkingFile(path: string, staged: boolean): Promise<string> {
-    const args = staged ? ['diff', '--cached', '--', path] : ['diff', '--', path]
+    const repoRelativePath = normalizeWorktreePath(path)
+    const args = staged ? ['diff', '--cached', '--', repoRelativePath] : ['diff', '--', repoRelativePath]
     const diff = await this.git.raw(args)
     if (diff.trim()) return diff
     // untracked 파일은 diff가 비므로 전체 내용을 추가 라인으로 표시
-    const filePath = join(this.repoPath, path)
-    const info = await stat(filePath).catch(() => null)
+    const { absolutePath } = await this.resolveExistingWorktreePath(repoRelativePath)
+    const info = await stat(absolutePath).catch(() => null)
     if (info && info.size > MAX_UNTRACKED_DIFF_BYTES) {
       return [
-        `diff --git a/${path} b/${path}`,
+        `diff --git a/${repoRelativePath} b/${repoRelativePath}`,
         '--- /dev/null',
-        `+++ b/${path}`,
+        `+++ b/${repoRelativePath}`,
         '@@',
         `+Diff omitted: untracked file is too large (${info.size} bytes).`
       ].join('\n')
     }
-    const content = await readFile(filePath, 'utf-8').catch(() => '')
+    const content = await readFile(absolutePath, 'utf-8')
     return content
       .split('\n')
       .map((l) => `+${l}`)
@@ -202,16 +194,32 @@ export class GitService {
   }
 
   // 원격 브랜치는 UI에서 "origin/" 프리픽스를 뗀 이름으로 호출한다
-  // (git checkout의 DWIM이 추적 브랜치를 자동 생성)
   async checkoutBranch(name: string): Promise<void> {
+    if (await this.isRemoteBranch(name)) {
+      const localName = localNameForRemoteBranch(name)
+      if (await this.hasLocalBranch(localName)) {
+        await this.git.checkout(localName)
+      } else {
+        await this.git.raw(['checkout', '--track', '-b', localName, name])
+      }
+      return
+    }
     await this.git.checkout(name)
   }
 
-  async stashAndCheckoutBranch(name: string, paths?: string[]): Promise<void> {
+  async stashAndCheckoutBranch(name: string, paths?: string[]): Promise<StashCheckoutResult> {
     const current = (await this.git.status()).current || 'unknown'
     const message = `Mergit checkout: ${current} -> ${name}`
+    const before = new Set((await this.stashList()).map((stash) => stash.oid))
     await this.stashSave(message, paths && paths.length > 0 ? paths : undefined)
-    await this.checkoutBranch(name)
+    const created = (await this.stashList()).find((stash) => !before.has(stash.oid)) ?? null
+    try {
+      await this.checkoutBranch(name)
+      return { checkedOut: true, stash: created }
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err)
+      return { checkedOut: false, stash: created, error }
+    }
   }
 
   async deleteBranch(name: string, force: boolean): Promise<void> {
@@ -230,7 +238,7 @@ export class GitService {
     stateFile: string
   ): Promise<{ conflicts: boolean }> {
     const conflicted = async (): Promise<boolean> => {
-      if (!this.hasGitFile(stateFile)) return false
+      if (!(await this.hasGitFile(stateFile))) return false
       const s = await this.git.status()
       return s.conflicted.length > 0
     }
@@ -263,13 +271,20 @@ export class GitService {
   }
 
   async abortOperation(): Promise<void> {
-    if (this.hasGitFile('CHERRY_PICK_HEAD')) await this.git.raw(['cherry-pick', '--abort'])
-    else if (this.hasGitFile('REVERT_HEAD')) await this.git.raw(['revert', '--abort'])
+    if (await this.hasGitFile('CHERRY_PICK_HEAD')) await this.git.raw(['cherry-pick', '--abort'])
+    else if (await this.hasGitFile('REVERT_HEAD')) await this.git.raw(['revert', '--abort'])
     else await this.git.merge(['--abort'])
   }
 
   async push(): Promise<void> {
-    await this.git.push(['-u', 'origin', 'HEAD'])
+    const s = await this.git.status()
+    if (!s.current) throw new GitServiceError('cannot push without a current branch', 'REMOTE')
+    if (!s.tracking) {
+      throw new GitServiceError(`no upstream configured for branch '${s.current}'`, 'REMOTE')
+    }
+    const tracking = splitRemoteBranch(s.tracking)
+    if (!tracking) throw new GitServiceError(`invalid upstream branch: ${s.tracking}`, 'REMOTE')
+    await this.git.raw(['push', tracking.remote, `HEAD:${tracking.branch}`])
   }
 
   async pull(): Promise<void> {
@@ -288,24 +303,23 @@ export class GitService {
   }
 
   async stashList(): Promise<StashDto[]> {
-    const raw = await this.git.raw(['stash', 'list']).catch(() => '')
-    return raw
-      .split('\n')
-      .filter(Boolean)
-      .map((line, i) => ({ index: i, message: line.replace(/^stash@\{\d+\}:\s*/, '') }))
+    const raw = await this.git.raw(['stash', 'list', '--format=%H%x00%gd%x00%gs%x00'])
+    const fields = raw.split('\0')
+    const result: StashDto[] = []
+    for (let i = 0; i + 2 < fields.length; i += 3) {
+      const oid = fields[i].trim()
+      const ref = fields[i + 1].trim()
+      const message = fields[i + 2].trim()
+      const index = Number(ref.match(/^stash@\{(\d+)\}$/)?.[1])
+      if (oid && Number.isInteger(index)) result.push({ index, oid, message })
+    }
+    return result
   }
 
-  async stashFiles(index: number): Promise<CommitFileDto[]> {
+  async stashFiles(oid: string): Promise<CommitFileDto[]> {
     const raw = await this.git
-      .raw(['stash', 'show', '--include-untracked', '--name-status', `stash@{${index}}`])
-      .catch(() => '')
-    return raw
-      .split('\n')
-      .filter(Boolean)
-      .map((line) => {
-        const [status, ...rest] = line.split('\t')
-        return { path: rest.join('\t'), status: status[0] }
-      })
+      .raw(['stash', 'show', '--include-untracked', '--name-status', '-z', oid])
+    return parseNameStatus(raw)
   }
 
   // stash apply/pop은 충돌 시 git이 종료 코드 1을 반환하지만 메시지가 stdout으로
@@ -316,25 +330,110 @@ export class GitService {
     if (s.conflicted.length > 0) throw new Error(`stash resulted in conflicts: ${args[0]}`)
   }
 
-  async stashApply(index: number): Promise<void> {
-    await this.stashRun(['apply', `stash@{${index}}`])
+  async stashApply(oid: string): Promise<void> {
+    await this.stashRun(['apply', oid])
   }
 
   // 적용 + 목록에서 제거. 충돌로 실패하면 git이 항목을 보존한다
-  async stashPop(index: number): Promise<void> {
-    await this.stashRun(['pop', `stash@{${index}}`])
+  async stashPop(oid: string): Promise<void> {
+    await this.stashApply(oid)
+    await this.stashDrop(oid)
   }
 
-  async stashDrop(index: number): Promise<void> {
-    await this.git.stash(['drop', `stash@{${index}}`])
+  async stashDrop(oid: string): Promise<void> {
+    const ref = await this.stashRefForOid(oid)
+    await this.git.stash(['drop', ref])
   }
 
   async readWorkingFile(path: string): Promise<string> {
-    return readFile(join(this.repoPath, path), 'utf-8')
+    const { absolutePath } = await this.resolveExistingWorktreePath(path)
+    return readFile(absolutePath, 'utf-8')
   }
 
   async saveResolved(path: string, content: string): Promise<void> {
-    await writeFile(join(this.repoPath, path), content, 'utf-8')
-    await this.git.add([path])
+    const { repoRelativePath, absolutePath } = await this.resolveExistingWorktreePath(path)
+    await writeFile(absolutePath, content, 'utf-8')
+    await this.git.add([repoRelativePath])
   }
+
+  private async resolveExistingWorktreePath(path: string): Promise<ResolvedWorktreePath> {
+    const repoRelativePath = normalizeWorktreePath(path)
+    const absolutePath = resolve(this.repoPath, ...repoRelativePath.split('/'))
+    const [repoRealPath, targetRealPath] = await Promise.all([
+      realpath(this.repoPath),
+      realpath(absolutePath)
+    ])
+    if (!isContainedPath(repoRealPath, targetRealPath)) {
+      throw new Error(`path escapes repository: ${path}`)
+    }
+    return { repoRelativePath, absolutePath }
+  }
+
+  private async stashRefForOid(oid: string): Promise<string> {
+    const stash = (await this.stashList()).find((item) => item.oid === oid)
+    if (!stash) throw new Error(`stash not found: ${oid}`)
+    const ref = `stash@{${stash.index}}`
+    const current = (await this.git.raw(['rev-parse', ref])).trim()
+    if (current !== oid) throw new Error(`stash changed before operation: ${oid}`)
+    return ref
+  }
+
+  private async isRemoteBranch(name: string): Promise<boolean> {
+    return this.git.raw(['show-ref', '--verify', `refs/remotes/${name}`])
+      .then(() => true)
+      .catch(() => false)
+  }
+
+  private async hasLocalBranch(name: string): Promise<boolean> {
+    return this.git.raw(['show-ref', '--verify', `refs/heads/${name}`])
+      .then(() => true)
+      .catch(() => false)
+  }
+
+  private async currentOperation(): Promise<StatusDto['operation']> {
+    if (await this.hasGitFile('CHERRY_PICK_HEAD')) return 'cherry-pick'
+    if (await this.hasGitFile('REVERT_HEAD')) return 'revert'
+    if (await this.hasGitFile('MERGE_HEAD')) return 'merge'
+    return null
+  }
+
+  private async hasGitFile(name: string): Promise<boolean> {
+    const path = await this.gitPath(name)
+    return access(path).then(() => true, () => false)
+  }
+
+  private async gitPath(name: string): Promise<string> {
+    const raw = await this.git.raw(['rev-parse', '--git-path', name])
+    return resolve(this.repoPath, raw.trim())
+  }
+}
+
+function splitRemoteBranch(name: string): { remote: string; branch: string } | null {
+  const slash = name.indexOf('/')
+  if (slash <= 0 || slash === name.length - 1) return null
+  return { remote: name.slice(0, slash), branch: name.slice(slash + 1) }
+}
+
+function localNameForRemoteBranch(name: string): string {
+  const remoteBranch = splitRemoteBranch(name)
+  if (!remoteBranch) throw new Error(`invalid remote branch: ${name}`)
+  return remoteBranch.branch
+}
+
+function normalizeWorktreePath(path: string): string {
+  if (!path || path.includes('\0')) throw new Error(`invalid repository path: ${path}`)
+  const slashPath = path.replace(/\\/g, '/')
+  if (slashPath.startsWith('/') || slashPath.startsWith('//') || /^[A-Za-z]:/.test(slashPath)) {
+    throw new Error(`path escapes repository: ${path}`)
+  }
+  const parts = slashPath.split('/').filter((part) => part && part !== '.')
+  if (parts.length === 0 || parts.some((part) => part === '..' || part === '.git')) {
+    throw new Error(`path escapes repository: ${path}`)
+  }
+  return parts.join('/')
+}
+
+function isContainedPath(root: string, target: string): boolean {
+  const rel = relative(root, target)
+  return rel === '' || (!!rel && !rel.startsWith('..') && !isAbsolute(rel))
 }

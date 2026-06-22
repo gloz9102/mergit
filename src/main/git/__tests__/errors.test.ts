@@ -1,7 +1,24 @@
 import { describe, expect, it } from 'vitest'
-import { toGitError } from '../errors'
+import { GitServiceError, toGitError } from '../errors'
 
 describe('toGitError', () => {
+  it('main에서 생성한 typed error code를 문자열 분류 없이 보존한다', () => {
+    const error = toGitError(new GitServiceError('No upstream configured', 'REMOTE'))
+
+    expect(error).toEqual({
+      code: 'REMOTE',
+      message: 'No upstream configured',
+      detail: 'No upstream configured'
+    })
+  })
+
+  it('typed error의 paths를 보존한다', () => {
+    const error = toGitError(new GitServiceError('Checkout blocked', 'CHECKOUT_BLOCKED', ['a.txt']))
+
+    expect(error.code).toBe('CHECKOUT_BLOCKED')
+    expect(error.paths).toEqual(['a.txt'])
+  })
+
   it('checkout blocked: local changes 파일 목록을 파싱한다', () => {
     const error = toGitError(
       new Error(

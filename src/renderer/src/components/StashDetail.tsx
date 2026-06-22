@@ -9,12 +9,15 @@ import { useUiStore } from '../stores/uiStore'
 const STATUS_COLOR: Record<string, string> = {
   A: 'text-emerald-400',
   M: 'text-amber-400',
-  D: 'text-red-400'
+  D: 'text-red-400',
+  R: 'text-sky-400',
+  C: 'text-cyan-400'
 }
 
-export function StashDetail({ index }: { index: number }) {
+export function StashDetail({ oid }: { oid: string }) {
   const { t } = useTranslation()
-  const stash = useRepoStore((s) => s.stashes.find((item) => item.index === index))
+  const refresh = useRepoStore((s) => s.refresh)
+  const stash = useRepoStore((s) => s.stashes.find((item) => item.oid === oid))
   const ask = useUiStore((s) => s.ask)
   const select = useUiStore((s) => s.select)
   const [files, setFiles] = useState<CommitFileDto[]>([])
@@ -26,30 +29,33 @@ export function StashDetail({ index }: { index: number }) {
     if (!stash) return
     setLoading(true)
     window.api
-      .stashFiles(index)
+      .stashFiles(oid)
       .then((result) => {
         if (!ignore) setFiles(result)
       })
-      .catch(toastError)
+      .catch((err) => {
+        toastError(err)
+        void refresh({ stashes: true })
+      })
       .finally(() => {
         if (!ignore) setLoading(false)
       })
     return () => {
       ignore = true
     }
-  }, [index, stash])
+  }, [oid, refresh, stash])
 
   if (!stash) return null
   const stashMessage = stash.message
 
   function applyStash(): void {
-    void run(() => window.api.stashApply(index), undefined, 'stash', { status: true, stashes: true })
+    void run(() => window.api.stashApply(oid), undefined, 'stash', { status: true, stashes: true })
   }
 
   function popStash(): void {
     void run(
       async () => {
-        await window.api.stashPop(index)
+        await window.api.stashPop(oid)
         select(null)
       },
       'toast.stashPopped',
@@ -62,7 +68,7 @@ export function StashDetail({ index }: { index: number }) {
     ask(t('stash.dropConfirm', { name: stashMessage }), () => {
       void run(
         async () => {
-          await window.api.stashDrop(index)
+          await window.api.stashDrop(oid)
           select(null)
         },
         undefined,
@@ -109,15 +115,23 @@ export function StashDetail({ index }: { index: number }) {
         ) : (
           files.map((file) => {
             const { dir, base } = splitPath(file.path)
+            const old = file.oldPath ? splitPath(file.oldPath) : null
+            const title = formatFileChange(file)
             return (
               <div
-                key={`${file.status}:${file.path}`}
-                title={file.path}
+                key={`${file.kind}:${file.oldPath ?? ''}:${file.path}`}
+                title={title}
                 className="flex w-full items-baseline gap-1.5 rounded px-1 py-0.5 font-mono text-xs"
               >
-                <span className={`shrink-0 ${STATUS_COLOR[file.status] ?? 'text-zinc-400'}`}>
-                  {file.status}
+                <span className={`shrink-0 ${STATUS_COLOR[file.kind] ?? 'text-zinc-400'}`}>
+                  {formatKind(file)}
                 </span>
+                {old && (
+                  <>
+                    <span className="shrink-0 truncate text-zinc-500">{old.base}</span>
+                    <span className="shrink-0 text-zinc-500">-&gt;</span>
+                  </>
+                )}
                 <span className="shrink-0 truncate text-zinc-200">{base}</span>
                 <span className="min-w-0 truncate text-[11px] text-zinc-500">{dir}</span>
               </div>
@@ -127,4 +141,12 @@ export function StashDetail({ index }: { index: number }) {
       </div>
     </div>
   )
+}
+
+function formatKind(file: CommitFileDto): string {
+  return file.score == null ? file.kind : `${file.kind}${file.score}`
+}
+
+function formatFileChange(file: CommitFileDto): string {
+  return file.oldPath ? `${file.oldPath} -> ${file.path}` : file.path
 }

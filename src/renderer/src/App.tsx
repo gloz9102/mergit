@@ -12,7 +12,6 @@ import { ResizeHandle } from './components/ResizeHandle'
 import { RightPanel } from './components/RightPanel'
 
 const clamp = (v: number, min: number, max: number): number => Math.min(max, Math.max(min, v))
-const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000
 
 function usePanelWidth(key: string, initial: number): [number, (dx: number, invert?: boolean) => void] {
   const [width, setWidth] = useState(() => {
@@ -41,7 +40,14 @@ export default function App() {
   const [leftWidth, resizeLeft] = usePanelWidth('leftPanelWidth', 224)
   const [rightWidth, resizeRight] = usePanelWidth('rightPanelWidth', 320)
 
-  useEffect(() => window.api.onRepoChanged(() => void refresh()), [refresh])
+  useEffect(() => window.api.onRepoChanged((scope) => void refresh(scope, { trailing: true })), [refresh])
+  useEffect(
+    () =>
+      window.api.onRepoWatchError((error) => {
+        useUiStore.getState().pushToast(i18n.t('error.WATCHER'), error.detail)
+      }),
+    []
+  )
 
   // "새 창으로 저장소 열기"로 만들어진 창이면 예약된 경로를 받아 자동으로 연다
   useEffect(() => {
@@ -71,20 +77,22 @@ export default function App() {
       .catch(() => {})
   }, [])
 
-  // 자동 업데이트 체크: 설정이 켜져 있으면 시작/토글 시 1회, 이후 60분마다 조용히 확인한다.
+  // main process가 update scheduler와 현재 update state를 소유한다.
   useEffect(() => {
-    if (!autoCheckForUpdates) return
-    function check(): void {
-      void window.api
-        .checkForUpdates({ autoDownload: autoDownloadUpdates })
-        .then((r) => {
-          if (r.hasUpdate) useUiStore.getState().setUpdateState(r)
-        })
-        .catch(() => {})
-    }
-    check()
-    const id = window.setInterval(check, UPDATE_CHECK_INTERVAL_MS)
-    return () => window.clearInterval(id)
+    void window.api
+      .getUpdateState()
+      .then((state) => useUiStore.getState().setUpdateState(state))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    void window.api
+      .configureUpdateChecks({
+        autoCheck: autoCheckForUpdates,
+        autoDownload: autoDownloadUpdates
+      })
+      .then((state) => useUiStore.getState().setUpdateState(state))
+      .catch(() => {})
   }, [autoCheckForUpdates, autoDownloadUpdates])
 
   // 창 제목: 저장소명과 앱 버전을 함께 보여준다.

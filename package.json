@@ -1,6 +1,6 @@
 {
   "name": "mergit",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "private": true,
   "main": "out/main/index.js",
   "scripts": {
@@ -8,7 +8,7 @@
     "build": "electron-vite build",
     "dist:win": "electron-vite build && electron-builder --win --x64",
     "dist:mac": "electron-vite build && electron-builder --mac --arm64",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -28,6 +28,7 @@
     "electron-builder": "^26.15.2",
     "electron-vite": "^5.0.0",
     "i18next": "^26.3.1",
+    "jsdom": "^29.1.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-i18next": "^17.0.8",

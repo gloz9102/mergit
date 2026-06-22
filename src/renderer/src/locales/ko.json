@@ -87,6 +87,10 @@
     "theirs": "Theirs — {{label}}",
     "output": "결과 (직접 편집 가능)",
     "save": "저장 후 해결 처리",
+    "loadingFile": "파일 불러오는 중...",
+    "resolveAllBeforeSave": "모든 충돌 블록을 해결한 뒤 저장할 수 있습니다",
+    "conflictMarkersRemain": "결과에 충돌 marker가 남아 있어 저장할 수 없습니다",
+    "discardManualConfirm": "직접 수정한 결과를 버리고 선택 항목으로 다시 생성할까요?",
     "prev": "이전 충돌",
     "next": "다음 충돌"
   },
@@ -171,6 +175,7 @@
     "NOT_A_REPO": "git 저장소가 아닙니다",
     "REMOTE": "원격 저장소 작업에 실패했습니다",
     "NO_REPO": "저장소가 열려 있지 않습니다",
+    "WATCHER": "저장소 변경 감시에 실패했습니다",
     "UPDATE_FAILED": "업데이트 작업에 실패했습니다",
     "UPDATE_UNSUPPORTED": "이 빌드에서는 자동 업데이트를 사용할 수 없습니다"
   },
@@ -188,6 +193,7 @@
     "branchCreated": "브랜치를 생성했습니다",
     "stashSaved": "스태시에 저장했습니다",
     "stashedAndCheckedOut": "변경사항을 스태시에 저장하고 브랜치를 전환했습니다",
+    "stashedCheckoutFailed": "변경사항은 스태시에 저장했지만 브랜치 전환은 실패했습니다",
     "stashPopped": "스태시를 적용하고 제거했습니다",
     "resolvedSaved": "해결로 표시했습니다",
     "operationAborted": "작업을 중단했습니다"

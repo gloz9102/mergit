@@ -1,7 +1,12 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppUpdater, UpdateInfo } from 'electron-updater'
-import { UPDATE_EVENT_CHANNEL, UpdateService, UpdateServiceError } from '../updateService'
+import {
+  UPDATE_CHECK_INTERVAL_MS,
+  UPDATE_EVENT_CHANNEL,
+  UpdateService,
+  UpdateServiceError
+} from '../updateService'
 
 vi.mock('electron', () => ({
   app: { getVersion: vi.fn(() => '0.4.0'), isPackaged: true },
@@ -65,6 +70,7 @@ function makeService() {
 describe('UpdateService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.useRealTimers()
   })
 
   it('초기화 시 종료 시 자동 설치를 켠다', () => {
@@ -97,6 +103,31 @@ describe('UpdateService', () => {
     await service.downloadUpdate()
 
     expect(updater.downloadUpdate).toHaveBeenCalledTimes(1)
+  })
+
+  it('macOS 빌드는 자동 다운로드를 지원하지 않고 릴리스 페이지 확인만 제공한다', async () => {
+    const updater = new FakeUpdater()
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ tag_name: 'v0.4.1', html_url: 'https://github.com/gloz9102/mergit/releases/tag/v0.4.1' }))
+    )
+    const service = new UpdateService({
+      updater: updater as unknown as AppUpdater,
+      getVersion: () => '0.4.0',
+      isPackaged: () => true,
+      platform: 'darwin',
+      fetchImpl,
+      getWindows: () => []
+    })
+
+    const result = await service.checkForUpdates({ autoDownload: true })
+
+    expect(result).toMatchObject({
+      hasUpdate: true,
+      canDownload: false,
+      status: 'available'
+    })
+    expect(updater.checkForUpdates).not.toHaveBeenCalled()
+    expect(() => service.downloadUpdate()).toThrow(UpdateServiceError)
   })
 
   it('installDownloadedUpdate: 다운로드 완료 전에는 설치하지 않는다', () => {
@@ -141,5 +172,44 @@ describe('UpdateService', () => {
         progress: { percent: 50, transferred: 10, total: 20, bytesPerSecond: 5 }
       })
     )
+  })
+
+  it('configureUpdateChecks: main scheduler가 자동 확인을 단일 interval로 소유한다', async () => {
+    vi.useFakeTimers()
+    const { service, updater } = makeService()
+
+    service.configureUpdateChecks({ autoCheck: true, autoDownload: true })
+    await Promise.resolve()
+    service.configureUpdateChecks({ autoCheck: true, autoDownload: true })
+    await Promise.resolve()
+
+    expect(updater.checkForUpdates).toHaveBeenCalledTimes(1)
+
+    vi.advanceTimersByTime(UPDATE_CHECK_INTERVAL_MS)
+    await Promise.resolve()
+
+    expect(updater.checkForUpdates).toHaveBeenCalledTimes(2)
+    expect(updater.autoDownload).toBe(true)
+  })
+
+  it('getState: late subscriber가 현재 update 상태를 조회한다', () => {
+    const { service, updater } = makeService()
+
+    updater.emit('update-downloaded', { ...updateInfo, downloadedFile: '/tmp/update.exe' })
+
+    expect(service.getState()).toMatchObject({
+      status: 'downloaded',
+      latestVersion: '0.4.1',
+      canDownload: true
+    })
+  })
+
+  it('checkForUpdates: 이미 다운로드된 같은 버전을 불필요하게 설치 불가 상태로 되돌리지 않는다', async () => {
+    const { service, updater } = makeService()
+    updater.emit('update-downloaded', { ...updateInfo, downloadedFile: '/tmp/update.exe' })
+
+    await service.checkForUpdates({ autoDownload: false })
+
+    expect(() => service.installDownloadedUpdate()).not.toThrow()
   })
 })
