@@ -105,5 +105,6 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           gh release create "$RELEASE_TAG" artifacts/**/* \
+            --repo "$GITHUB_REPOSITORY" \
             --title "Mergit $RELEASE_TAG" \
             --generate-notes
