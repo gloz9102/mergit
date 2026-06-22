@@ -59,6 +59,7 @@ export interface CommitFileDto {
 
 export type GitErrorCode =
   | 'GIT_ERROR'
+  | 'CHECKOUT_BLOCKED'
   | 'CONFLICT'
   | 'AUTH'
   | 'NOT_A_REPO'
@@ -71,6 +72,7 @@ export interface GitErrorDto {
   code: GitErrorCode
   message: string
   detail: string
+  paths?: string[]
 }
 
 export type ConflictSegment =

@@ -44,6 +44,13 @@
     "deleteConfirm": "Delete branch '{{name}}'?",
     "forceDeleteConfirm": "Branch '{{name}}' is not fully merged. Force delete?"
   },
+  "checkoutBlocked": {
+    "title": "Checkout blocked",
+    "description": "Checking out {{branch}} would overwrite local changes in the files below.",
+    "blockedFiles": "Blocking files",
+    "stashBlocking": "Stash blocking files and checkout",
+    "stashAll": "Stash all changes and checkout"
+  },
   "commit": {
     "cherryPick": "Cherry-pick onto current branch",
     "revert": "Revert this commit",
@@ -158,6 +165,7 @@
   },
   "error": {
     "GIT_ERROR": "Git operation failed",
+    "CHECKOUT_BLOCKED": "Local changes prevent checkout",
     "CONFLICT": "Conflicts detected",
     "AUTH": "Authentication failed. Check your system git credential helper / SSH keys",
     "NOT_A_REPO": "Not a git repository",
@@ -179,6 +187,7 @@
     "mergeConflict": "Conflicts detected — resolve files from the banner above",
     "branchCreated": "Branch created",
     "stashSaved": "Saved to stash",
+    "stashedAndCheckedOut": "Saved changes to stash and checked out branch",
     "stashPopped": "Stash popped",
     "resolvedSaved": "Marked as resolved",
     "operationAborted": "Operation aborted"

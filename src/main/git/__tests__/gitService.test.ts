@@ -5,6 +5,21 @@ import { describe, expect, it } from 'vitest'
 import { GitService, MAX_UNTRACKED_DIFF_BYTES } from '../gitService'
 import { gitIn, makeConflictRepo, makeRepo, makeRepoWithCommits } from './fixtures'
 
+function makeCheckoutBlockedRepo(): string {
+  const dir = makeRepo()
+  const git = gitIn(dir)
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), 'main lock\n')
+  git('add', '.')
+  git('commit', '-m', 'add lock')
+  git('checkout', '-b', 'feature')
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), 'feature lock\n')
+  git('commit', '-am', 'feature lock')
+  git('checkout', 'main')
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), 'local lock\n')
+  writeFileSync(join(dir, 'local-only.txt'), 'keep me\n')
+  return dir
+}
+
 describe('GitService', () => {
   it('info: git 저장소가 아니면 throw', async () => {
     const svc = new GitService('/tmp')
@@ -191,6 +206,39 @@ describe('GitService', () => {
     const names = (await svc.branches()).map((b) => b.name)
     expect(names).not.toContain('work')
     expect(names).not.toContain('work2')
+  })
+
+  it('checkoutBranch: 대상 브랜치가 로컬 변경을 덮어쓰면 실패한다', async () => {
+    const dir = makeCheckoutBlockedRepo()
+    const svc = new GitService(dir)
+
+    await expect(svc.checkoutBranch('feature')).rejects.toThrow(/overwritten by checkout/)
+    expect((await svc.status()).current).toBe('main')
+  })
+
+  it('stashAndCheckoutBranch: 지정한 blocked 파일만 스태시하고 체크아웃한다', async () => {
+    const dir = makeCheckoutBlockedRepo()
+    const svc = new GitService(dir)
+
+    await svc.stashAndCheckoutBranch('feature', ['pnpm-lock.yaml'])
+
+    const status = await svc.status()
+    expect(status.current).toBe('feature')
+    expect(status.files.map((f) => f.path)).toEqual(['local-only.txt'])
+    expect(await svc.readWorkingFile('pnpm-lock.yaml')).toBe('feature lock\n')
+    expect((await svc.stashList())[0].message).toContain('Mergit checkout: main -> feature')
+  })
+
+  it('stashAndCheckoutBranch: paths가 없으면 전체 변경을 스태시하고 체크아웃한다', async () => {
+    const dir = makeCheckoutBlockedRepo()
+    const svc = new GitService(dir)
+
+    await svc.stashAndCheckoutBranch('feature')
+
+    const status = await svc.status()
+    expect(status.current).toBe('feature')
+    expect(status.files).toEqual([])
+    expect((await svc.stashList())[0].message).toContain('Mergit checkout: main -> feature')
   })
 
   it('merge 충돌: conflicts=true, status에 충돌 파일과 operation=merge', async () => {

@@ -207,6 +207,13 @@ export class GitService {
     await this.git.checkout(name)
   }
 
+  async stashAndCheckoutBranch(name: string, paths?: string[]): Promise<void> {
+    const current = (await this.git.status()).current || 'unknown'
+    const message = `Mergit checkout: ${current} -> ${name}`
+    await this.stashSave(message, paths && paths.length > 0 ? paths : undefined)
+    await this.checkoutBranch(name)
+  }
+
   async deleteBranch(name: string, force: boolean): Promise<void> {
     await this.git.deleteLocalBranch(name, force)
   }

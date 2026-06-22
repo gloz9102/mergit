@@ -1,14 +1,43 @@
 import type { GitErrorCode, GitErrorDto } from '../../shared/types'
 
+const CHECKOUT_BLOCKED_HEADERS = [
+  /Your local changes to the following files would be overwritten by (?:checkout|switch):/i,
+  /The following untracked working tree files would be overwritten by (?:checkout|switch):/i
+]
+
 export function toGitError(err: unknown): GitErrorDto {
   const detail = err instanceof Error ? err.message : String(err)
   const message = detail.split('\n')[0]
   let code: GitErrorCode = 'GIT_ERROR'
-  if (/conflict|충돌/i.test(detail)) code = 'CONFLICT'
+  const checkoutBlocked = isCheckoutBlocked(detail)
+  if (checkoutBlocked) code = 'CHECKOUT_BLOCKED'
+  else if (/conflict|충돌/i.test(detail)) code = 'CONFLICT'
   else if (/authentication|permission denied|could not read username|인증/i.test(detail)) code = 'AUTH'
   else if (/not a git repository|저장소가 아닙니다/i.test(detail)) code = 'NOT_A_REPO'
   else if (/couldn't find remote ref|no upstream|unable to access|could not resolve host/i.test(detail))
     code = 'REMOTE'
   else if (/no repository open/i.test(detail)) code = 'NO_REPO'
-  return { code, message, detail }
+  const error: GitErrorDto = { code, message, detail }
+  if (checkoutBlocked) error.paths = parseCheckoutBlockedPaths(detail)
+  return error
+}
+
+function isCheckoutBlocked(detail: string): boolean {
+  return CHECKOUT_BLOCKED_HEADERS.some((header) => header.test(detail))
+}
+
+export function parseCheckoutBlockedPaths(detail: string): string[] {
+  const paths: string[] = []
+  const lines = detail.split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    if (!CHECKOUT_BLOCKED_HEADERS.some((header) => header.test(lines[i]))) continue
+    for (let j = i + 1; j < lines.length; j++) {
+      const line = lines[j]
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      if (/^(Please |Aborting|error: |fatal: )/i.test(trimmed)) break
+      paths.push(trimmed)
+    }
+  }
+  return [...new Set(paths)]
 }

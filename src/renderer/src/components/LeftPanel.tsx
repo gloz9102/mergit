@@ -6,6 +6,7 @@ import { limitBranches, limitList, type LimitedList } from '../lib/listLimits'
 import { run, toastError } from '../lib/run'
 import { useRepoStore } from '../stores/repoStore'
 import { useUiStore } from '../stores/uiStore'
+import { CheckoutBlockedDialog } from './CheckoutBlockedDialog'
 import { ContextMenu, MenuItem } from './ContextMenu'
 import { Highlight } from './Highlight'
 
@@ -13,6 +14,11 @@ interface MenuState {
   x: number
   y: number
   branch: BranchDto
+}
+
+interface CheckoutBlockedState {
+  target: string
+  paths: string[]
 }
 
 export function LeftPanel() {
@@ -23,6 +29,7 @@ export function LeftPanel() {
   const refresh = useRepoStore((s) => s.refresh)
   const ask = useUiStore((s) => s.ask)
   const pushToast = useUiStore((s) => s.pushToast)
+  const setPending = useUiStore((s) => s.setPending)
   const branchQuery = useUiStore((s) => s.branchQuery)
   const setBranchQueryText = useUiStore((s) => s.setBranchQueryText)
   const closeBranchQuery = useUiStore((s) => s.closeBranchQuery)
@@ -32,6 +39,7 @@ export function LeftPanel() {
   const selected = useUiStore((s) => s.selected)
   const select = useUiStore((s) => s.select)
   const [menu, setMenu] = useState<MenuState | null>(null)
+  const [checkoutBlocked, setCheckoutBlocked] = useState<CheckoutBlockedState | null>(null)
   const [renaming, setRenaming] = useState<{ from: string; value: string } | null>(null)
   // 섹션(로컬/원격/스태시) 접힘 상태 — localStorage에 보존
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
@@ -98,10 +106,39 @@ export function LeftPanel() {
 
   const noMatch = branchQuery?.mode === 'filter' && locals.length + remotes.length === 0
 
-  function checkout(branch: BranchDto): void {
+  async function checkout(branch: BranchDto): Promise<void> {
     // 원격 브랜치는 프리픽스를 떼고 git의 DWIM 추적 브랜치 생성을 활용
     const name = branch.isRemote ? branch.name.split('/').slice(1).join('/') : branch.name
-    void run(() => window.api.checkoutBranch(name), undefined, 'checkout')
+    setPending('checkout', true)
+    try {
+      await window.api.checkoutBranch(name)
+      await refresh()
+    } catch (err) {
+      const e = err as GitErrorDto
+      if (e.code === 'CHECKOUT_BLOCKED') {
+        setCheckoutBlocked({ target: name, paths: e.paths ?? [] })
+      } else {
+        toastError(err)
+      }
+    } finally {
+      setPending('checkout', false)
+    }
+  }
+
+  async function recoverCheckout(paths?: string[]): Promise<void> {
+    if (!checkoutBlocked) return
+    const target = checkoutBlocked.target
+    setCheckoutBlocked(null)
+    setPending('checkout', true)
+    try {
+      await window.api.stashAndCheckoutBranch(target, paths)
+      pushToast(t('toast.stashedAndCheckedOut'))
+      await refresh()
+    } catch (err) {
+      toastError(err)
+    } finally {
+      setPending('checkout', false)
+    }
   }
 
   function mergeBranch(branch: BranchDto): void {
@@ -303,6 +340,15 @@ export function LeftPanel() {
             </>
           )}
         </ContextMenu>
+      )}
+      {checkoutBlocked && (
+        <CheckoutBlockedDialog
+          target={checkoutBlocked.target}
+          paths={checkoutBlocked.paths}
+          onClose={() => setCheckoutBlocked(null)}
+          onStashBlocking={() => void recoverCheckout(checkoutBlocked.paths)}
+          onStashAll={() => void recoverCheckout()}
+        />
       )}
     </div>
   )

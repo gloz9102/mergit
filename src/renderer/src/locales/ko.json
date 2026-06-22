@@ -44,6 +44,13 @@
     "deleteConfirm": "'{{name}}' 브랜치를 삭제할까요?",
     "forceDeleteConfirm": "'{{name}}' 브랜치는 머지되지 않았습니다. 강제로 삭제할까요?"
   },
+  "checkoutBlocked": {
+    "title": "브랜치 전환이 막혔습니다",
+    "description": "{{branch}} 브랜치로 전환하면 아래 파일의 로컬 변경사항이 덮어써질 수 있습니다.",
+    "blockedFiles": "전환을 막은 파일",
+    "stashBlocking": "막힌 파일만 임시 보관하고 전환",
+    "stashAll": "모든 변경사항 임시 보관하고 전환"
+  },
   "commit": {
     "cherryPick": "현재 브랜치에 체리픽",
     "revert": "이 커밋 되돌리기 (revert)",
@@ -158,6 +165,7 @@
   },
   "error": {
     "GIT_ERROR": "Git 작업이 실패했습니다",
+    "CHECKOUT_BLOCKED": "로컬 변경사항 때문에 브랜치를 전환할 수 없습니다",
     "CONFLICT": "충돌이 발생했습니다",
     "AUTH": "인증에 실패했습니다. 시스템 git 설정(credential helper / SSH 키)을 확인하세요",
     "NOT_A_REPO": "git 저장소가 아닙니다",
@@ -179,6 +187,7 @@
     "mergeConflict": "충돌이 발생했습니다 — 상단 배너에서 충돌 파일을 해결하세요",
     "branchCreated": "브랜치를 생성했습니다",
     "stashSaved": "스태시에 저장했습니다",
+    "stashedAndCheckedOut": "변경사항을 스태시에 저장하고 브랜치를 전환했습니다",
     "stashPopped": "스태시를 적용하고 제거했습니다",
     "resolvedSaved": "해결로 표시했습니다",
     "operationAborted": "작업을 중단했습니다"

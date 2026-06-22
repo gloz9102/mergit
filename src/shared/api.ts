@@ -76,6 +76,7 @@ export interface GitApi {
   undoLastCommit(): Promise<void>
   createBranch(name: string, checkout: boolean): Promise<void>
   checkoutBranch(name: string): Promise<void>
+  stashAndCheckoutBranch(name: string, paths?: string[]): Promise<void>
   deleteBranch(name: string, force: boolean): Promise<void>
   renameBranch(oldName: string, newName: string): Promise<void>
   merge(branch: string): Promise<{ conflicts: boolean }>
@@ -125,6 +126,7 @@ export const GIT_API_METHODS = [
   'undoLastCommit',
   'createBranch',
   'checkoutBranch',
+  'stashAndCheckoutBranch',
   'deleteBranch',
   'renameBranch',
   'merge',
