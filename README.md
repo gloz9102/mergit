@@ -60,6 +60,14 @@
 - **설정과 업데이트** — 언어 즉시 전환, 설정창에서 GitHub 저장소 링크와 현재 버전 확인, 수동/자동 업데이트 확인.
 - **종료 확인** — 마지막 창을 닫을 때 확인 다이얼로그로 실수 종료를 방지합니다.
 
+**Staging — 스테이지 / 언스테이지 / discard:**
+
+![Staging 패널](docs/screenshots/staging.png)
+
+**설정과 업데이트 — 언어 전환 · GitHub 링크 · 버전 · 업데이트 확인:**
+
+![설정 / 업데이트](docs/screenshots/settings.png)
+
 ## 다운로드 (Windows)
 
 [Releases](https://github.com/gloz9102/mergit/releases)에서 받을 수 있습니다.
