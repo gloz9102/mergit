@@ -173,4 +173,6 @@ Vitest가 `.test.ts`와 `.test.tsx`를 모두 실행합니다.
 
 ## 라이선스
 
-[MIT](LICENSE)
+Copyright (c) 2026 shkim
+
+[GPL-3.0-only](LICENSE)

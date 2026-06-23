@@ -9,6 +9,7 @@ publish:
 files:
   - out/**
   - resources/**
+  - LICENSE
   # 디자인 원본은 패키지에 포함하지 않는다
   - '!resources/mergit-app-icon-flat.png'
 win:

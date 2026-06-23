@@ -2,6 +2,7 @@
   "name": "mergit",
   "version": "0.6.1",
   "private": true,
+  "license": "GPL-3.0-only",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
