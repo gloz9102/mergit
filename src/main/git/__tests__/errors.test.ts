@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { GitServiceError, toGitError } from '../errors'
+import { GitCommandExecutionError } from '../gitCommandCoordinator'
 
 describe('toGitError', () => {
   it('main에서 생성한 typed error code를 문자열 분류 없이 보존한다', () => {
@@ -61,5 +62,32 @@ describe('toGitError', () => {
 
     expect(error.code).toBe('CHECKOUT_BLOCKED')
     expect(error.paths).toEqual([])
+  })
+
+  it('Git 실행 오류의 stdout, stderr, exit code를 구조적으로 보존한다', () => {
+    const error = new GitCommandExecutionError({
+      kind: 'mutation',
+      label: 'checkoutBranch',
+      message: 'checkout failed',
+      stdout: 'stdout text',
+      stderr: 'stderr text',
+      exitCode: 1
+    })
+
+    expect(error.kind).toBe('mutation')
+    expect(error.label).toBe('checkoutBranch')
+    expect(error.stdout).toBe('stdout text')
+    expect(error.stderr).toBe('stderr text')
+    expect(error.exitCode).toBe(1)
+    expect(toGitError(error).detail).toContain('stderr text')
+  })
+
+  it('오류 detail의 URL credential은 사용자에게 노출하지 않는다', () => {
+    const error = toGitError(
+      new Error('fatal: unable to access https://user:secret@example.com/private.git/')
+    )
+
+    expect(error.detail).toContain('https://***@example.com/private.git/')
+    expect(error.detail).not.toContain('user:secret')
   })
 })

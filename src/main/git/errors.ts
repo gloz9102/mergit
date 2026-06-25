@@ -1,4 +1,5 @@
 import type { GitErrorCode, GitErrorDto } from '../../shared/types'
+import { GitCommandExecutionError, GitCommandTimeoutError } from './gitCommandCoordinator'
 
 export class GitServiceError extends Error {
   constructor(
@@ -18,12 +19,22 @@ const CHECKOUT_BLOCKED_HEADERS = [
 
 export function toGitError(err: unknown): GitErrorDto {
   if (err instanceof GitServiceError) {
-    const detail = err.message
+    const detail = sanitizeGitDetail(err.message)
     const error: GitErrorDto = { code: err.code, message: detail.split('\n')[0], detail }
     if (err.paths) error.paths = err.paths
     return error
   }
-  const detail = err instanceof Error ? err.message : String(err)
+  if (err instanceof GitCommandTimeoutError) {
+    const detail = sanitizeGitDetail(err.message)
+    return { code: 'GIT_ERROR', message: detail, detail }
+  }
+  const detail = sanitizeGitDetail(
+    err instanceof GitCommandExecutionError
+      ? gitCommandErrorDetail(err)
+      : err instanceof Error
+        ? err.message
+        : String(err)
+  )
   const message = detail.split('\n')[0]
   let code: GitErrorCode = 'GIT_ERROR'
   const checkoutBlocked = isCheckoutBlocked(detail)
@@ -37,6 +48,15 @@ export function toGitError(err: unknown): GitErrorDto {
   const error: GitErrorDto = { code, message, detail }
   if (checkoutBlocked) error.paths = parseCheckoutBlockedPaths(detail)
   return error
+}
+
+function gitCommandErrorDetail(err: GitCommandExecutionError): string {
+  const detail = [err.message, err.stderr, err.stdout].filter(Boolean).join('\n')
+  return detail || `Git ${err.kind} command failed: ${err.label}`
+}
+
+function sanitizeGitDetail(detail: string): string {
+  return detail.replace(/(https?:\/\/)([^/\s:@]+(?::[^/\s@]*)?@)/gi, '$1***@')
 }
 
 function isCheckoutBlocked(detail: string): boolean {

@@ -208,7 +208,8 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       repoGeneration: get().repoGeneration + 1,
       historyVersion: 0,
       historyOptions: get().historyOptions,
-      hasMoreCommits: true
+      hasMoreCommits: true,
+      loadingMore: false
     })
     await get().refresh()
   },
@@ -270,7 +271,12 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         hasMoreCommits: page.length === PAGE_SIZE
       })
     } finally {
-      set({ loadingMore: false })
+      if (
+        get().repoGeneration === repoGeneration &&
+        historyOptionsKey(get().historyOptions) === requestHistoryOptionsKey
+      ) {
+        set({ loadingMore: false })
+      }
     }
   },
 

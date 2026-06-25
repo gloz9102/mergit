@@ -145,6 +145,35 @@ describe('repoStore.refresh', () => {
     expect(api.log).toHaveBeenCalledWith(1, 500, { order: 'date-order', all: true })
   })
 
+  it('loadMore: 저장소 전환 후 이전 요청의 finally가 새 loadingMore를 덮지 않는다', async () => {
+    const api = installApi()
+    const slowLog = deferred<CommitDto[]>()
+    api.log.mockReturnValueOnce(slowLog.promise)
+    useRepoStore.setState({
+      repo: { path: '/repo-a', name: 'repo-a' },
+      repoGeneration: 1,
+      commits: [{ hash: 'a', parents: [], author: 'A', email: 'a@test.com', date: '', subject: 'a', body: '', refs: [] }],
+      loadingMore: false,
+      hasMoreCommits: true
+    })
+
+    const loadMore = useRepoStore.getState().loadMore()
+    await Promise.resolve()
+    expect(useRepoStore.getState().loadingMore).toBe(true)
+
+    useRepoStore.setState({
+      repo: { path: '/repo-b', name: 'repo-b' },
+      repoGeneration: 2,
+      commits: [{ hash: 'b', parents: [], author: 'B', email: 'b@test.com', date: '', subject: 'b', body: '', refs: [] }],
+      loadingMore: true
+    })
+    slowLog.resolve([])
+    await loadMore
+
+    expect(useRepoStore.getState().repo?.path).toBe('/repo-b')
+    expect(useRepoStore.getState().loadingMore).toBe(true)
+  })
+
   it('openRepo: 늦게 끝난 이전 요청은 최신 저장소 state를 덮지 않는다', async () => {
     const api = installApi()
     const first = deferred<RepoInfoDto>()
