@@ -9,6 +9,7 @@ export function MergeBanner() {
   const status = useRepoStore((s) => s.status)
   const openConflict = useUiStore((s) => s.openConflict)
   const ask = useUiStore((s) => s.ask)
+  const gitBusy = useUiStore((s) => s.gitMutation !== null)
 
   const op = status?.operation ?? null
   // 작업 진행 중이 아니어도 충돌이 남아 있으면(stash pop 충돌 등) 배너로 해결 경로를 제공한다
@@ -45,6 +46,7 @@ export function MergeBanner() {
       {op && (
         <div className="ml-auto flex gap-2">
           <button
+            disabled={gitBusy}
             onClick={() =>
               ask(t('merge.abortConfirm'), () =>
                 void run(async () => {
@@ -58,7 +60,7 @@ export function MergeBanner() {
             {t('merge.abort')}
           </button>
           <button
-            disabled={!allResolved}
+            disabled={gitBusy || !allResolved}
             onClick={() => void run(() => window.api.continueOperation(), doneToast)}
             className="rounded bg-emerald-700 px-3 py-1 font-semibold hover:bg-emerald-600 disabled:opacity-40"
           >

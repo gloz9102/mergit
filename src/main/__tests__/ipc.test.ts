@@ -185,6 +185,21 @@ describe('app IPC', () => {
     expect(res).toEqual({ ok: true, data: false })
   })
 
+  it('confirmWindowClose: 요청한 BrowserWindow만 닫는다', async () => {
+    const sender = { id: 44 }
+    const win = {
+      webContents: sender,
+      isDestroyed: vi.fn(() => false),
+      close: vi.fn()
+    }
+    electronMock.browserWindow.fromWebContents.mockReturnValue(win)
+
+    const res = await handler('app:confirmWindowClose')({ sender })
+
+    expect(res).toEqual({ ok: true, data: null })
+    expect(win.close).toHaveBeenCalledTimes(1)
+  })
+
   it('openRepo: watcher 오류를 renderer 진단 이벤트로 전달한다', async () => {
     const dir = makeRepo()
     const send = vi.fn()

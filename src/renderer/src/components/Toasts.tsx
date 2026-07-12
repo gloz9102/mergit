@@ -9,12 +9,23 @@ export function Toasts() {
   const [expanded, setExpanded] = useState<number | null>(null)
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 flex w-96 flex-col gap-2">
+    <div aria-live="polite" className="fixed bottom-4 left-4 right-4 z-40 flex w-auto flex-col gap-2 sm:left-auto sm:w-96">
       {toasts.map((toast) => (
-        <div key={toast.id} className="rounded border border-zinc-600 bg-zinc-800 p-3 text-sm shadow-lg">
+        <div
+          key={toast.id}
+          role={toast.kind === 'error' ? 'alert' : 'status'}
+          className={`rounded border bg-zinc-800 p-3 text-sm shadow-lg ${
+            toast.kind === 'error'
+              ? 'border-red-700'
+              : toast.kind === 'success'
+                ? 'border-emerald-700'
+                : 'border-zinc-600'
+          }`}
+        >
           <div className="flex items-start justify-between gap-2">
             <span>{toast.message}</span>
             <button
+              aria-label={t('common.close')}
               onClick={() => {
                 dismiss(toast.id)
                 setExpanded((prev) => (prev === toast.id ? null : prev))

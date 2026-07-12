@@ -1,28 +1,37 @@
-import { BrowserWindow, dialog } from 'electron'
+import { BrowserWindow } from 'electron'
 
-let confirmedQuit = false
+const confirmedWindowIds = new Set<number>()
+let updateQuit = false
 
 export function resetQuitConfirmation(): void {
-  confirmedQuit = false
+  confirmedWindowIds.clear()
+  updateQuit = false
+}
+
+export function allowUpdateQuit(): void {
+  updateQuit = true
+}
+
+export function confirmWindowClose(win: BrowserWindow): void {
+  if (win.isDestroyed()) return
+  confirmedWindowIds.add(win.webContents.id)
+  win.close()
 }
 
 export function attachQuitConfirmation(win: BrowserWindow): void {
-  win.on('close', (event) => {
-    if (confirmedQuit || !isLastWindow(win)) return
-    const result = dialog.showMessageBoxSync(win, {
-      type: 'question',
-      buttons: ['종료', '취소'],
-      defaultId: 1,
-      cancelId: 1,
-      title: 'Mergit 종료',
-      message: 'Mergit을 종료할까요?'
-    })
-    if (result === 0) {
-      confirmedQuit = true
-      return
-    }
-    event.preventDefault()
+  const windowId = win.webContents.id
+  let rendererReady = false
+  win.webContents.once('did-finish-load', () => {
+    rendererReady = true
   })
+  win.on('close', (event) => {
+    if (updateQuit || confirmedWindowIds.delete(windowId) || !isLastWindow(win)) return
+    // renderer가 준비되기 전에는 아직 열린 저장소나 사용자 작업이 없다.
+    if (!rendererReady || win.webContents.isDestroyed()) return
+    event.preventDefault()
+    win.webContents.send('app-close-requested')
+  })
+  win.once('closed', () => confirmedWindowIds.delete(windowId))
 }
 
 function isLastWindow(current: BrowserWindow): boolean {

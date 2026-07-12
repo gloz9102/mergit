@@ -13,9 +13,11 @@ void i18n.use(initReactI18next).init({
   fallbackLng: 'en',
   interpolation: { escapeValue: false }
 })
+document.documentElement.lang = initial
 
 export function setLanguage(lang: 'ko' | 'en'): void {
   localStorage.setItem('lang', lang)
+  document.documentElement.lang = lang
   void i18n.changeLanguage(lang)
 }
 

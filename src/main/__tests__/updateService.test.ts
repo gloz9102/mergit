@@ -211,9 +211,29 @@ describe('UpdateService', () => {
   it('checkForUpdates: 이미 다운로드된 같은 버전을 불필요하게 설치 불가 상태로 되돌리지 않는다', async () => {
     const { service, updater } = makeService()
     updater.emit('update-downloaded', { ...updateInfo, downloadedFile: '/tmp/update.exe' })
+    updater.checkForUpdates.mockImplementation(async () => {
+      updater.emit('update-available', updateInfo)
+      return { isUpdateAvailable: true, updateInfo, versionInfo: updateInfo }
+    })
 
     await service.checkForUpdates({ autoDownload: false })
 
+    expect(service.getState().status).toBe('downloaded')
     expect(() => service.installDownloadedUpdate()).not.toThrow()
+  })
+
+  it('checkForUpdates: 다른 버전이 발견되면 이전 다운로드 상태를 초기화한다', async () => {
+    const { service, updater } = makeService()
+    updater.emit('update-downloaded', { ...updateInfo, downloadedFile: '/tmp/update.exe' })
+    const nextInfo = { ...updateInfo, version: '0.5.0' }
+    updater.checkForUpdates.mockImplementation(async () => {
+      updater.emit('update-available', nextInfo)
+      return { isUpdateAvailable: true, updateInfo: nextInfo, versionInfo: nextInfo }
+    })
+
+    await service.checkForUpdates({ autoDownload: false })
+
+    expect(service.getState()).toMatchObject({ status: 'available', latestVersion: '0.5.0' })
+    expect(() => service.installDownloadedUpdate()).toThrow(UpdateServiceError)
   })
 })

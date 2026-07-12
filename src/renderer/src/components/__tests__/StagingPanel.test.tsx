@@ -123,6 +123,19 @@ describe('StagingPanel diff lifecycle', () => {
     expect(buttons[0].className).not.toContain('bg-zinc-700')
     expect(buttons[1].className).toContain('bg-zinc-700')
   })
+
+  it('부분 스테이징 파일 변경 취소는 staged 변경 보존을 안내한다', async () => {
+    api.diffWorkingFile.mockResolvedValue('')
+    const { container } = renderStagingPanel(statusWithFiles([file('same.txt', 'M', 'M')]))
+    const discard = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      button.textContent?.includes('Discard')
+    )
+    if (!discard) throw new Error('discard button not found')
+
+    await act(async () => discard.click())
+
+    expect(useUiStore.getState().confirm?.message).toContain('Staged changes will be preserved')
+  })
 })
 
 function renderStagingPanel(status: StatusDto): { container: HTMLDivElement; root: Root } {

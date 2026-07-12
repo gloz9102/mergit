@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import i18n from './i18n'
 import { toastError } from './lib/run'
 import { useRepoStore } from './stores/repoStore'
@@ -10,6 +10,15 @@ import { GraphView } from './components/GraphView'
 import { DiffPanel } from './components/DiffPanel'
 import { ResizeHandle } from './components/ResizeHandle'
 import { RightPanel } from './components/RightPanel'
+import { MergeBanner } from './components/MergeBanner'
+import { SettingsModal } from './components/SettingsModal'
+import { ConfirmDialog } from './components/ConfirmDialog'
+import { Toasts } from './components/Toasts'
+import { UpdateModal } from './components/UpdateModal'
+
+const ConflictEditor = lazy(() =>
+  import('./components/ConflictEditor').then((module) => ({ default: module.ConflictEditor }))
+)
 
 const clamp = (v: number, min: number, max: number): number => Math.min(max, Math.max(min, v))
 
@@ -23,17 +32,12 @@ function usePanelWidth(key: string, initial: number): [number, (dx: number, inve
     setWidth((w) => clamp(w + (invert ? -dx : dx), 160, 560))
   return [width, resize]
 }
-import { MergeBanner } from './components/MergeBanner'
-import { ConflictEditor } from './components/ConflictEditor'
-import { SettingsModal } from './components/SettingsModal'
-import { ConfirmDialog } from './components/ConfirmDialog'
-import { Toasts } from './components/Toasts'
-import { UpdateModal } from './components/UpdateModal'
 
 export default function App() {
   const repo = useRepoStore((s) => s.repo)
   const refresh = useRepoStore((s) => s.refresh)
   const diffView = useUiStore((s) => s.diffView)
+  const conflictFile = useUiStore((s) => s.conflictFile)
   const appVersion = useUiStore((s) => s.appVersion)
   const autoCheckForUpdates = useUiStore((s) => s.autoCheckForUpdates)
   const autoDownloadUpdates = useUiStore((s) => s.autoDownloadUpdates)
@@ -41,6 +45,17 @@ export default function App() {
   const [rightWidth, resizeRight] = usePanelWidth('rightPanelWidth', 320)
 
   useEffect(() => window.api.onRepoChanged((scope) => void refresh(scope, { trailing: true })), [refresh])
+  useEffect(
+    () =>
+      window.api.onAppCloseRequested(() => {
+        const ui = useUiStore.getState()
+        if (ui.confirm) return
+        ui.ask(i18n.t('app.quitConfirm'), () => {
+          void window.api.confirmWindowClose().catch(toastError)
+        })
+      }),
+    []
+  )
   useEffect(
     () =>
       window.api.onRepoWatchError((error) => {
@@ -142,7 +157,7 @@ export default function App() {
   }, [])
 
   return (
-    <div className="flex h-screen flex-col bg-zinc-900 text-zinc-200">
+    <main className="flex h-screen flex-col bg-zinc-900 text-zinc-200">
       <Toolbar />
       <MergeBanner />
       {repo ? (
@@ -160,11 +175,21 @@ export default function App() {
       ) : (
         <EmptyState />
       )}
-      <ConflictEditor />
+      {conflictFile && (
+        <Suspense
+          fallback={
+            <div role="status" className="fixed inset-0 z-30 flex items-center justify-center bg-zinc-900 text-sm text-zinc-400">
+              {i18n.t('merge.loadingFile')}
+            </div>
+          }
+        >
+          <ConflictEditor />
+        </Suspense>
+      )}
       <SettingsModal />
       <UpdateModal />
       <ConfirmDialog />
       <Toasts />
-    </div>
+    </main>
   )
 }

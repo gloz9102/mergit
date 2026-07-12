@@ -50,7 +50,6 @@ beforeEach(() => {
     value: api as unknown as Window['api'],
     configurable: true
   })
-  vi.spyOn(window, 'confirm').mockReturnValue(false)
 })
 
 afterEach(() => {
@@ -130,8 +129,25 @@ describe('ConflictEditor', () => {
       checkbox(container, 1).click()
     })
 
-    expect(window.confirm).toHaveBeenCalled()
+    expect(useUiStore.getState().confirm?.message).toContain('Discard manual edits')
     expect(output(container).value).toBe('manual resolution')
+  })
+
+  it('선택한 draft를 닫을 때 폐기 확인을 요청한다', async () => {
+    api.readWorkingFile.mockResolvedValue(A_CONTENT)
+    const { container } = renderEditor()
+    act(() => useUiStore.getState().openConflict('a.txt'))
+    await flush()
+    await act(async () => checkbox(container, 0).click())
+    const close = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      button.textContent?.includes('Close')
+    )
+    if (!close) throw new Error('close button not found')
+
+    await act(async () => close.click())
+
+    expect(useUiStore.getState().conflictFile).toBe('a.txt')
+    expect(useUiStore.getState().confirm?.message).toContain('Discard the unsaved')
   })
 })
 

@@ -20,6 +20,7 @@ import {
   type GitCommandCoordinator
 } from './gitCommandCoordinator'
 import { parseNameStatus } from './nameStatus'
+import type { RepoWatchPaths } from './repoWatcher'
 
 export const MAX_UNTRACKED_DIFF_BYTES = 512 * 1024
 
@@ -51,6 +52,23 @@ export class GitService {
       const isRepo = await this.git.checkIsRepo()
       if (!isRepo) throw new Error(`not a git repository: ${this.repoPath}`)
       return { path: this.repoPath, name: basename(this.repoPath) }
+    })
+  }
+
+  async watchPaths(): Promise<RepoWatchPaths> {
+    return this.coordinator.query('watchPaths', async () => {
+      const [worktreePath, gitDirRaw, gitCommonDirRaw] = await Promise.all([
+        realpath(this.repoPath),
+        this.git.raw(['rev-parse', '--absolute-git-dir']),
+        this.git.raw(['rev-parse', '--path-format=absolute', '--git-common-dir'])
+      ])
+      const gitDirPath = resolve(this.repoPath, gitDirRaw.trim())
+      const gitCommonDirPath = resolve(this.repoPath, gitCommonDirRaw.trim())
+      const [gitDir, gitCommonDir] = await Promise.all([
+        realpath(gitDirPath),
+        realpath(gitCommonDirPath)
+      ])
+      return { worktreePath, gitDir, gitCommonDir }
     })
   }
 
@@ -178,24 +196,27 @@ export class GitService {
   async stage(paths: string[]): Promise<void> {
     return this.coordinator.mutation('stage', async () => {
       if (paths.length === 0) return
-      await this.git.add(paths)
+      await this.addPaths(paths)
     })
   }
 
   async unstage(paths: string[]): Promise<void> {
     return this.coordinator.mutation('unstage', async () => {
       if (paths.length === 0) return
-      await this.git.raw(['restore', '--staged', '--', ...paths])
+      const head = await this.git.raw(['rev-parse', '--verify', 'HEAD']).catch(() => '')
+      if (head.trim()) await this.git.raw(['restore', '--staged', '--', ...paths])
+      else await this.git.raw(['rm', '--cached', '-f', '--', ...paths])
     })
   }
 
-  async discard(paths: string[]): Promise<void> {
-    return this.coordinator.mutation('discard', async () => {
+  async discardUnstaged(paths: string[]): Promise<void> {
+    return this.coordinator.mutation('discardUnstaged', async () => {
       if (paths.length === 0) return
       const s = await this.git.status()
       const untracked = paths.filter((p) => s.not_added.includes(p))
       const tracked = paths.filter((p) => !s.not_added.includes(p))
-      if (tracked.length) await this.git.raw(['restore', '--source=HEAD', '--staged', '--worktree', '--', ...tracked])
+      // index를 source로 사용해 부분 스테이징된 변경은 보존한다.
+      if (tracked.length) await this.git.raw(['restore', '--worktree', '--', ...tracked])
       if (untracked.length) await this.git.raw(['clean', '-f', '--', ...untracked])
     })
   }
@@ -430,8 +451,12 @@ export class GitService {
     return this.coordinator.mutation('saveResolved', async () => {
       const { repoRelativePath, absolutePath } = await this.resolveExistingWorktreePath(path)
       await writeFile(absolutePath, content, 'utf-8')
-      await this.git.add([repoRelativePath])
+      await this.addPaths([repoRelativePath])
     })
+  }
+
+  private async addPaths(paths: string[]): Promise<void> {
+    await this.git.raw(['add', '--', ...paths])
   }
 
   private async resolveExistingWorktreePath(path: string): Promise<ResolvedWorktreePath> {

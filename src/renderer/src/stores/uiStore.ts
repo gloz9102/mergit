@@ -16,6 +16,11 @@ export interface DiffRequest {
   targetKey: string
 }
 
+export interface GitMutationToken {
+  id: number
+  key: string
+}
+
 // 좌측 브랜치 패널의 입력 모드 — filter: 목록 좁힘, search: 하이라이트만. 동시에 하나만 활성.
 export interface BranchQuery {
   mode: 'filter' | 'search'
@@ -36,10 +41,13 @@ export interface LeftPanelListLimits {
   stash: number
 }
 
+export type ToastKind = 'info' | 'success' | 'error'
+
 interface Toast {
   id: number
   message: string
   detail?: string
+  kind: ToastKind
 }
 
 interface ConfirmState {
@@ -55,6 +63,7 @@ interface UiState {
   confirm: ConfirmState | null
   // 진행 중인 git 작업 키 (예: 'pull') — 버튼 스피너/비활성화에 사용
   pending: Record<string, boolean>
+  gitMutation: GitMutationToken | null
   appVersion: string
   autoCheckForUpdates: boolean
   autoDownloadUpdates: boolean
@@ -81,12 +90,14 @@ interface UiState {
   closeCommitSearch(): void
   openConflict(path: string | null): void
   setShowSettings(v: boolean): void
-  pushToast(message: string, detail?: string): void
+  pushToast(message: string, detail?: string, kind?: ToastKind): void
   dismissToast(id: number): void
   ask(message: string, onConfirm: () => void): void
   closeConfirm(): void
   resetRepoScopedState(): void
   setPending(key: string, value: boolean): void
+  beginGitMutation(key: string): GitMutationToken | null
+  endGitMutation(token: GitMutationToken): void
   setAppVersion(version: string): void
   setAutoCheckForUpdates(value: boolean): void
   setAutoDownloadUpdates(value: boolean): void
@@ -99,6 +110,7 @@ interface UiState {
 
 let toastId = 0
 let diffRequestId = 0
+let gitMutationId = 0
 const BRANCH_CHECKOUT_GESTURE_KEY = 'branchCheckoutGesture'
 const LEFT_PANEL_LIST_LIMITS_KEY = 'leftPanelListLimits'
 const ALWAYS_SHOW_CURRENT_BRANCH_KEY = 'alwaysShowCurrentBranch'
@@ -171,6 +183,7 @@ export const useUiStore = create<UiState>((set) => ({
   toasts: [],
   confirm: null,
   pending: {},
+  gitMutation: null,
   appVersion: '',
   autoCheckForUpdates: loadBoolean(AUTO_CHECK_FOR_UPDATES_KEY, true),
   autoDownloadUpdates: loadBoolean(AUTO_DOWNLOAD_UPDATES_KEY, false),
@@ -228,9 +241,9 @@ export const useUiStore = create<UiState>((set) => ({
   openConflict: (conflictFile) => set({ conflictFile }),
   setShowSettings: (showSettings) => set({ showSettings }),
 
-  pushToast: (message, detail) => {
+  pushToast: (message, detail, kind = 'info') => {
     const id = ++toastId
-    set((s) => ({ toasts: [...s.toasts, { id, message, detail }] }))
+    set((s) => ({ toasts: [...s.toasts, { id, message, detail, kind }] }))
     setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 6000)
   },
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
@@ -246,10 +259,22 @@ export const useUiStore = create<UiState>((set) => ({
       branchQuery: null,
       commitQuery: null,
       confirm: null,
-      pending: {}
+      pending: {},
+      gitMutation: null
     }),
 
   setPending: (key, value) => set((s) => ({ pending: { ...s.pending, [key]: value } })),
+  beginGitMutation: (key) => {
+    let token: GitMutationToken | null = null
+    set((state) => {
+      if (state.gitMutation) return {}
+      token = { id: ++gitMutationId, key }
+      return { gitMutation: token }
+    })
+    return token
+  },
+  endGitMutation: (token) =>
+    set((state) => (state.gitMutation?.id === token.id ? { gitMutation: null } : {})),
   setAppVersion: (appVersion) => set({ appVersion }),
   setAutoCheckForUpdates: (autoCheckForUpdates) => {
     if (hasLocalStorage()) {

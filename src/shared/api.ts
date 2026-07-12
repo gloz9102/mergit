@@ -88,7 +88,7 @@ export interface GitApi {
   diffWorkingFile(path: string, staged: boolean): Promise<string>
   stage(paths: string[]): Promise<void>
   unstage(paths: string[]): Promise<void>
-  discard(paths: string[]): Promise<void>
+  discardUnstaged(paths: string[]): Promise<void>
   commit(message: string, amend?: boolean): Promise<void>
   lastCommitMessage(): Promise<string>
   undoLastCommit(): Promise<void>
@@ -115,6 +115,8 @@ export interface GitApi {
   saveResolved(path: string, content: string): Promise<void>
   onRepoChanged(cb: (scope?: RefreshScope) => void): () => void
   onRepoWatchError(cb: (error: RepoWatchErrorDto) => void): () => void
+  onAppCloseRequested(cb: () => void): () => void
+  confirmWindowClose(): Promise<void>
   // app:* 채널 — git 세션 불필요, preload에서 수동 노출(GIT_API_METHODS 미포함)
   getAppVersion(): Promise<string>
   checkForUpdates(options?: UpdateCheckOptions): Promise<UpdateCheckDto>
@@ -141,7 +143,7 @@ export const GIT_API_METHODS = [
   'diffWorkingFile',
   'stage',
   'unstage',
-  'discard',
+  'discardUnstaged',
   'commit',
   'lastCommitMessage',
   'undoLastCommit',
@@ -173,6 +175,8 @@ type IpcMethods = Exclude<
   keyof GitApi,
   | 'onRepoChanged'
   | 'onRepoWatchError'
+  | 'onAppCloseRequested'
+  | 'confirmWindowClose'
   | 'focusOpenRepo'
   | 'getAppVersion'
   | 'checkForUpdates'

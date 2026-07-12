@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { setLanguage } from '../i18n'
 import { toastError } from '../lib/run'
 import { useUiStore, type LeftPanelSection } from '../stores/uiStore'
+import { useDialogA11y } from '../lib/useDialogA11y'
 
 const LIST_LIMIT_PRESETS = [5, 10, 15] as const
 const GITHUB_REPO_URL = 'https://github.com/gloz9102/mergit'
@@ -27,6 +28,7 @@ export function SettingsModal() {
   const alwaysShowCurrentBranch = useUiStore((s) => s.alwaysShowCurrentBranch)
   const setAlwaysShowCurrentBranch = useUiStore((s) => s.setAlwaysShowCurrentBranch)
   const [customLimitOpen, setCustomLimitOpen] = useState<Partial<Record<LeftPanelSection, boolean>>>({})
+  const dialogRef = useDialogA11y(show, () => setShow(false))
   if (!show) return null
 
   async function checkUpdate(): Promise<void> {
@@ -47,8 +49,8 @@ export function SettingsModal() {
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50">
-      <div className="w-96 rounded-lg border border-zinc-600 bg-zinc-800 p-4">
-        <p className="mb-3 font-semibold">{t('settings.title')}</p>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="settings-dialog-title" tabIndex={-1} className="max-h-[calc(100vh_-_2rem)] w-[calc(100%_-_2rem)] max-w-96 overflow-y-auto rounded-lg border border-zinc-600 bg-zinc-800 p-4">
+        <p id="settings-dialog-title" className="mb-3 font-semibold">{t('settings.title')}</p>
         <p className="mb-1 text-xs uppercase text-zinc-500">{t('settings.language')}</p>
         <div className="flex gap-2">
           {(['ko', 'en'] as const).map((lang) => (
@@ -155,7 +157,7 @@ export function SettingsModal() {
           </button>
         </div>
         <div className="mt-4 flex justify-end">
-          <button onClick={() => setShow(false)} className="rounded px-3 py-1.5 text-sm hover:bg-zinc-700">
+          <button data-dialog-initial-focus onClick={() => setShow(false)} className="rounded px-3 py-1.5 text-sm hover:bg-zinc-700">
             {t('settings.close')}
           </button>
         </div>

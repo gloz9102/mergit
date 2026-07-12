@@ -20,6 +20,7 @@ export function StashDetail({ oid }: { oid: string }) {
   const stash = useRepoStore((s) => s.stashes.find((item) => item.oid === oid))
   const ask = useUiStore((s) => s.ask)
   const select = useUiStore((s) => s.select)
+  const gitBusy = useUiStore((s) => s.gitMutation !== null)
   const [files, setFiles] = useState<CommitFileDto[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -86,18 +87,21 @@ export function StashDetail({ oid }: { oid: string }) {
       </div>
       <div className="grid grid-cols-3 gap-2">
         <button
+          disabled={gitBusy}
           onClick={applyStash}
           className="rounded bg-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-600"
         >
           {t('stash.apply')}
         </button>
         <button
+          disabled={gitBusy}
           onClick={popStash}
           className="rounded bg-emerald-700 px-3 py-1.5 text-sm font-semibold hover:bg-emerald-600"
         >
           {t('stash.pop')}
         </button>
         <button
+          disabled={gitBusy}
           onClick={dropStash}
           className="rounded bg-red-900/70 px-3 py-1.5 text-sm text-red-100 hover:bg-red-800"
         >

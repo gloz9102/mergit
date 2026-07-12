@@ -13,6 +13,7 @@ export function StagingPanel() {
   const commits = useRepoStore((s) => s.commits)
   const ask = useUiStore((s) => s.ask)
   const diffView = useUiStore((s) => s.diffView)
+  const gitBusy = useUiStore((s) => s.gitMutation !== null)
   const openDiff = useUiStore((s) => s.openDiff)
   const { showDiff: showLatestDiff, clearDiff } = useLatestDiff()
   const [message, setMessage] = useState('')
@@ -92,6 +93,7 @@ export function StagingPanel() {
         onShowDiff={showDiff}
         onClearDiff={clearDiff}
         onAsk={ask}
+        disabled={gitBusy}
       />
       <p className="text-xs uppercase text-zinc-500">
         {t('panel.staged')} ({staged.length})
@@ -103,6 +105,7 @@ export function StagingPanel() {
         onShowDiff={showDiff}
         onClearDiff={clearDiff}
         onAsk={ask}
+        disabled={gitBusy}
       />
       <label
         className={`flex items-center gap-1.5 text-xs ${canAmend ? 'text-zinc-400' : 'text-zinc-600'}`}
@@ -110,7 +113,7 @@ export function StagingPanel() {
         <input
           type="checkbox"
           checked={amend}
-          disabled={!canAmend}
+          disabled={!canAmend || gitBusy}
           onChange={(e) => toggleAmend(e.target.checked)}
           className="accent-emerald-600"
         />
@@ -125,7 +128,7 @@ export function StagingPanel() {
       />
       <button
         onClick={commit}
-        disabled={!message.trim() || (!amend && staged.length === 0)}
+        disabled={gitBusy || !message.trim() || (!amend && staged.length === 0)}
         className="rounded bg-emerald-700 py-1.5 text-sm font-semibold hover:bg-emerald-600 disabled:opacity-40"
       >
         {amend ? t('panel.amendCommit') : t('panel.commit')}
@@ -140,7 +143,8 @@ const FileList = memo(function FileList({
   activeDiffTargetKey,
   onShowDiff,
   onClearDiff,
-  onAsk
+  onAsk,
+  disabled
 }: {
   files: FileStatusDto[]
   fromStaged: boolean
@@ -148,6 +152,7 @@ const FileList = memo(function FileList({
   onShowDiff: (file: FileStatusDto, fromStaged: boolean) => Promise<void>
   onClearDiff: () => void
   onAsk: (message: string, onConfirm: () => void) => void
+  disabled: boolean
 }) {
   const { t } = useTranslation()
 
@@ -171,6 +176,7 @@ const FileList = memo(function FileList({
         </button>
         {fromStaged ? (
           <button
+            disabled={disabled}
             onClick={() => {
               onClearDiff()
               void run(() => window.api.unstage([file.path]), undefined, undefined, { status: true })
@@ -182,6 +188,7 @@ const FileList = memo(function FileList({
         ) : (
           <>
             <button
+              disabled={disabled}
               onClick={() => {
                 onClearDiff()
                 void run(() => window.api.stage([file.path]), undefined, undefined, { status: true })
@@ -191,6 +198,7 @@ const FileList = memo(function FileList({
               {t('panel.stage')}
             </button>
             <button
+              disabled={disabled}
               onClick={() => {
                 onClearDiff()
                 // 이 파일만 스태시 — 메시지를 경로로 지정해 목록에서 식별
@@ -204,10 +212,11 @@ const FileList = memo(function FileList({
               {t('panel.stashFile')}
             </button>
             <button
+              disabled={disabled}
               onClick={() =>
-                onAsk(t('common.discardConfirm', { name: file.path }), () => {
+                onAsk(t(discardConfirmKey(file), { name: file.path }), () => {
                   onClearDiff()
-                  void run(() => window.api.discard([file.path]), undefined, undefined, { status: true })
+                  void run(() => window.api.discardUnstaged([file.path]), undefined, undefined, { status: true })
                 })
               }
               className="hidden rounded px-1 text-xs text-red-400 hover:text-red-300 group-hover:block"
@@ -222,3 +231,9 @@ const FileList = memo(function FileList({
 
   return <div className="min-h-0 flex-1 overflow-y-auto">{files.map(fileRow)}</div>
 })
+
+function discardConfirmKey(file: FileStatusDto): string {
+  if (file.index === '?') return 'common.discardUntrackedConfirm'
+  if (file.index !== ' ') return 'common.discardPartialConfirm'
+  return 'common.discardTrackedConfirm'
+}

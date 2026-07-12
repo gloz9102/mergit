@@ -16,6 +16,7 @@ export function DiffPanel() {
           {diffView.title}
         </span>
         <button
+          aria-label={t('common.close')}
           onClick={() => openDiff(null)}
           className="ml-auto shrink-0 rounded px-2 py-0.5 text-sm text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
         >

@@ -208,6 +208,44 @@ describe('GitService', () => {
     expect(names).not.toContain('work2')
   })
 
+  it('stage: 옵션처럼 생긴 파일명만 정확히 스테이징한다', async () => {
+    const dir = makeRepo()
+    writeFileSync(join(dir, 'a.txt'), 'other change\n')
+    writeFileSync(join(dir, '--all'), 'all file\n')
+    writeFileSync(join(dir, '-n'), 'dry-run file\n')
+    const svc = new GitService(dir)
+
+    await svc.stage(['--all'])
+    await svc.stage(['-n'])
+
+    const files = await svc.status()
+    expect(files.files.find((file) => file.path === '--all')?.index).toBe('A')
+    expect(files.files.find((file) => file.path === '-n')?.index).toBe('A')
+    expect(files.files.find((file) => file.path === 'a.txt')).toMatchObject({
+      index: ' ',
+      workingDir: 'M'
+    })
+  })
+
+  it('unstage: 최초 커밋 전에도 working tree를 보존한다', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gkc-unborn-'))
+    const git = gitIn(dir)
+    git('init', '-b', 'main')
+    git('config', 'user.email', 'test@test.com')
+    git('config', 'user.name', 'Test')
+    writeFileSync(join(dir, 'new.txt'), 'staged\n')
+    const svc = new GitService(dir)
+    await svc.stage(['new.txt'])
+    writeFileSync(join(dir, 'new.txt'), 'working\n')
+
+    await svc.unstage(['new.txt'])
+
+    expect((await svc.status()).files).toEqual([
+      expect.objectContaining({ path: 'new.txt', index: '?', workingDir: '?' })
+    ])
+    expect(readFileSync(join(dir, 'new.txt'), 'utf-8')).toBe('working\n')
+  })
+
   it('checkoutBranch: 원격 브랜치는 명시적인 tracking branch로 체크아웃한다', async () => {
     const dir = makeRepo()
     const remoteDir = mkdtempSync(join(tmpdir(), 'gkc-remote-'))
@@ -416,6 +454,22 @@ describe('GitService', () => {
     expect(await svc.stashList()).toEqual([])
   })
 
+  it('saveResolved: 옵션처럼 생긴 파일명 외의 변경은 스테이징하지 않는다', async () => {
+    const dir = makeRepo()
+    const git = gitIn(dir)
+    writeFileSync(join(dir, '--all'), 'base\n')
+    git('add', '--', '--all')
+    git('commit', '-m', 'add option-like path')
+    writeFileSync(join(dir, 'a.txt'), 'other change\n')
+    const svc = new GitService(dir)
+
+    await svc.saveResolved('--all', 'resolved\n')
+
+    const status = await svc.status()
+    expect(status.files.find((file) => file.path === '--all')).toMatchObject({ index: 'M', workingDir: ' ' })
+    expect(status.files.find((file) => file.path === 'a.txt')).toMatchObject({ index: ' ', workingDir: 'M' })
+  })
+
   it('stashList: Git 실패를 빈 목록으로 숨기지 않는다', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'gkc-not-repo-'))
     const svc = new GitService(dir)
@@ -606,12 +660,12 @@ describe('GitService', () => {
     expect(readFileSync(outside, 'utf-8')).toBe('outside\n')
   })
 
-  it('discard: 수정을 되돌리고 untracked는 삭제한다', async () => {
+  it('discardUnstaged: 수정을 index 상태로 되돌리고 untracked는 삭제한다', async () => {
     const dir = makeRepo()
     writeFileSync(join(dir, 'a.txt'), 'changed\n')
     writeFileSync(join(dir, 'junk.txt'), 'junk\n')
     const svc = new GitService(dir)
-    await svc.discard(['a.txt', 'junk.txt'])
+    await svc.discardUnstaged(['a.txt', 'junk.txt'])
     expect((await svc.status()).files).toHaveLength(0)
   })
 
@@ -629,12 +683,18 @@ describe('GitService', () => {
     expect((await svc.status()).operation).toBe(null)
   })
 
-  it('discard: staged 변경도 되돌린다', async () => {
+  it('discardUnstaged: 부분 스테이징된 변경을 보존한다', async () => {
     const dir = makeRepo()
     writeFileSync(join(dir, 'a.txt'), 'staged change\n')
     const svc = new GitService(dir)
     await svc.stage(['a.txt'])
-    await svc.discard(['a.txt'])
-    expect((await svc.status()).files).toHaveLength(0)
+    writeFileSync(join(dir, 'a.txt'), 'unstaged change\n')
+
+    await svc.discardUnstaged(['a.txt'])
+
+    expect((await svc.status()).files).toEqual([
+      expect.objectContaining({ path: 'a.txt', index: 'M', workingDir: ' ' })
+    ])
+    expect(readFileSync(join(dir, 'a.txt'), 'utf-8')).toBe('staged change\n')
   })
 })

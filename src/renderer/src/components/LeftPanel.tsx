@@ -38,6 +38,9 @@ export function LeftPanel() {
   const alwaysShowCurrentBranch = useUiStore((s) => s.alwaysShowCurrentBranch)
   const selected = useUiStore((s) => s.selected)
   const select = useUiStore((s) => s.select)
+  const gitBusy = useUiStore((s) => s.gitMutation !== null)
+  const beginGitMutation = useUiStore((s) => s.beginGitMutation)
+  const endGitMutation = useUiStore((s) => s.endGitMutation)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [checkoutBlocked, setCheckoutBlocked] = useState<CheckoutBlockedState | null>(null)
   const [renaming, setRenaming] = useState<{ from: string; value: string } | null>(null)
@@ -107,6 +110,8 @@ export function LeftPanel() {
   const noMatch = branchQuery?.mode === 'filter' && locals.length + remotes.length === 0
 
   async function checkout(branch: BranchDto): Promise<void> {
+    const mutation = beginGitMutation('checkout')
+    if (!mutation) return
     const name = branch.name
     setPending('checkout', true)
     try {
@@ -121,11 +126,14 @@ export function LeftPanel() {
       }
     } finally {
       setPending('checkout', false)
+      endGitMutation(mutation)
     }
   }
 
   async function recoverCheckout(paths?: string[]): Promise<void> {
     if (!checkoutBlocked) return
+    const mutation = beginGitMutation('checkout')
+    if (!mutation) return
     const target = checkoutBlocked.target
     setCheckoutBlocked(null)
     setPending('checkout', true)
@@ -144,6 +152,7 @@ export function LeftPanel() {
       toastError(err)
     } finally {
       setPending('checkout', false)
+      endGitMutation(mutation)
     }
   }
 
@@ -160,6 +169,8 @@ export function LeftPanel() {
   }
 
   async function deleteBranch(name: string, force: boolean): Promise<void> {
+    const mutation = beginGitMutation('deleteBranch')
+    if (!mutation) return
     try {
       await window.api.deleteBranch(name, force)
       await refresh()
@@ -170,6 +181,8 @@ export function LeftPanel() {
       } else {
         toastError(err)
       }
+    } finally {
+      endGitMutation(mutation)
     }
   }
 
@@ -201,6 +214,7 @@ export function LeftPanel() {
     return (
       <button
         key={branch.name}
+        disabled={gitBusy}
         onClick={() => {
           if (branchCheckoutGesture === 'single') checkout(branch)
         }}
@@ -312,7 +326,7 @@ export function LeftPanel() {
               checkout(menu.branch)
               setMenu(null)
             }}
-            disabled={menu.branch.current}
+            disabled={gitBusy || menu.branch.current}
           />
           <MenuItem
             label={t('branch.mergeInto', { target: status?.current ?? '' })}
@@ -320,12 +334,13 @@ export function LeftPanel() {
               mergeBranch(menu.branch)
               setMenu(null)
             }}
-            disabled={menu.branch.current}
+            disabled={gitBusy || menu.branch.current}
           />
           {!menu.branch.isRemote && (
             <>
               <MenuItem
                 label={t('branch.rename')}
+                disabled={gitBusy}
                 onClick={() => {
                   closeBranchQuery() // rename input과 autoFocus 경쟁 방지
                   setRenaming({ from: menu.branch.name, value: menu.branch.name })
@@ -335,7 +350,7 @@ export function LeftPanel() {
               <MenuItem
                 label={t('branch.delete')}
                 danger
-                disabled={menu.branch.current}
+                disabled={gitBusy || menu.branch.current}
                 onClick={() => {
                   ask(t('branch.deleteConfirm', { name: menu.branch.name }), () =>
                     void deleteBranch(menu.branch.name, false)
@@ -389,7 +404,7 @@ function SectionHeader({
   return (
     <button
       onClick={onToggle}
-      className={`mb-1 flex w-full items-center gap-1 text-xs font-semibold uppercase text-zinc-500 hover:text-zinc-300 ${
+      className={`mb-1 flex w-full items-center gap-1 text-xs font-semibold uppercase text-zinc-400 hover:text-zinc-200 ${
         topGap ? 'mt-3' : ''
       }`}
     >

@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { useDialogA11y } from '../lib/useDialogA11y'
 
 interface CheckoutBlockedDialogProps {
   target: string
@@ -16,11 +17,12 @@ export function CheckoutBlockedDialog({
   onStashAll
 }: CheckoutBlockedDialogProps) {
   const { t } = useTranslation()
+  const dialogRef = useDialogA11y(true, onClose)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-[30rem] rounded-lg border border-zinc-600 bg-zinc-800 p-4 shadow-xl">
-        <h2 className="text-sm font-semibold text-zinc-100">{t('checkoutBlocked.title')}</h2>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="checkout-blocked-title" tabIndex={-1} className="w-[calc(100%_-_2rem)] max-w-[30rem] rounded-lg border border-zinc-600 bg-zinc-800 p-4 shadow-xl">
+        <h2 id="checkout-blocked-title" className="text-sm font-semibold text-zinc-100">{t('checkoutBlocked.title')}</h2>
         <p className="mt-2 text-sm text-zinc-300">
           {t('checkoutBlocked.description', { branch: target })}
         </p>
@@ -35,7 +37,7 @@ export function CheckoutBlockedDialog({
           )}
         </div>
         <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <button onClick={onClose} className="rounded px-3 py-1.5 text-sm hover:bg-zinc-700">
+          <button data-dialog-initial-focus onClick={onClose} className="rounded px-3 py-1.5 text-sm hover:bg-zinc-700">
             {t('common.cancel')}
           </button>
           <button

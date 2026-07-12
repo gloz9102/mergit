@@ -5,6 +5,7 @@ import { addRecentRepo } from '../lib/recentRepos'
 import { run, toastError } from '../lib/run'
 import { useRepoStore } from '../stores/repoStore'
 import { useUiStore } from '../stores/uiStore'
+import { useDialogA11y } from '../lib/useDialogA11y'
 import { ContextMenu, MenuItem } from './ContextMenu'
 
 function Spinner() {
@@ -22,6 +23,7 @@ export function Toolbar() {
   const openRepo = useRepoStore((s) => s.openRepo)
   const setShowSettings = useUiStore((s) => s.setShowSettings)
   const pending = useUiStore((s) => s.pending)
+  const gitBusy = useUiStore((s) => s.gitMutation !== null)
   const setPending = useUiStore((s) => s.setPending)
   const [branchName, setBranchName] = useState<string | null>(null) // null = 입력창 닫힘
   const [stashMessage, setStashMessage] = useState<string | null>(null) // null = 입력창 닫힘
@@ -29,8 +31,9 @@ export function Toolbar() {
   const [bookmarks, setBookmarks] = useState<BookmarkedRepo[]>(getBookmarks)
   // 북마크 항목 클릭 시 어느 창으로 열지 묻는 모달
   const [bookmarkModal, setBookmarkModal] = useState<BookmarkedRepo | null>(null)
+  const bookmarkDialogRef = useDialogA11y(!!bookmarkModal, () => setBookmarkModal(null))
 
-  const anyPending = Object.values(pending).some(Boolean)
+  const anyPending = gitBusy || Object.values(pending).some(Boolean)
   const bookmarked = !!repo && bookmarks.some((b) => b.path === repo.path)
 
   // 다른 창에서 북마크를 토글해도 이 창의 별/리스트가 함께 갱신된다
@@ -108,7 +111,7 @@ export function Toolbar() {
       <div className="flex items-center">
         <button
           className={`${btn} rounded-r-none`}
-          disabled={!!pending['open']}
+          disabled={!!pending['open'] || gitBusy}
           onClick={() => void handleOpen(false)}
         >
           {pending['open'] && <Spinner />}
@@ -116,7 +119,7 @@ export function Toolbar() {
         </button>
         <button
           className={`${btn} rounded-l-none border-l border-zinc-600 px-1.5`}
-          disabled={!!pending['open']}
+          disabled={!!pending['open'] || gitBusy}
           onClick={(e) => {
             const r = e.currentTarget.getBoundingClientRect()
             setOpenMenu({ x: r.left, y: r.bottom + 2 })
@@ -162,15 +165,21 @@ export function Toolbar() {
           onClick={() => setBookmarkModal(null)}
         >
           <div
-            className="w-96 rounded-lg border border-zinc-600 bg-zinc-800 p-4"
+            ref={bookmarkDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bookmark-dialog-title"
+            tabIndex={-1}
+            className="w-[calc(100%_-_2rem)] max-w-96 rounded-lg border border-zinc-600 bg-zinc-800 p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-sm font-semibold">
+            <p id="bookmark-dialog-title" className="text-sm font-semibold">
               <span className="text-yellow-400">★</span> {bookmarkModal.name}
             </p>
             <p className="mt-1 truncate text-xs text-zinc-500">{bookmarkModal.path}</p>
             <div className="mt-4 flex justify-end gap-2">
               <button
+                data-dialog-initial-focus
                 onClick={() => setBookmarkModal(null)}
                 className="rounded px-3 py-1.5 text-sm hover:bg-zinc-700"
               >
@@ -195,7 +204,7 @@ export function Toolbar() {
       {repo && <span className="mx-2 text-sm font-semibold text-emerald-400">{repo.name}</span>}
       <button
         className={btn}
-        disabled={!repo || !!pending['pull']}
+        disabled={!repo || !!pending['pull'] || gitBusy}
         onClick={() => void run(() => window.api.pull(), 'toast.pulled', 'pull')}
       >
         {pending['pull'] && <Spinner />}
@@ -203,7 +212,7 @@ export function Toolbar() {
       </button>
       <button
         className={btn}
-        disabled={!repo || !!pending['push']}
+        disabled={!repo || !!pending['push'] || gitBusy}
         onClick={() => void run(() => window.api.push(), 'toast.pushed', 'push')}
       >
         {pending['push'] && <Spinner />}
@@ -211,14 +220,14 @@ export function Toolbar() {
       </button>
       <button
         className={btn}
-        disabled={!repo || !!pending['fetch']}
+        disabled={!repo || !!pending['fetch'] || gitBusy}
         onClick={() => void run(() => window.api.fetch(), 'toast.fetched', 'fetch')}
       >
         {pending['fetch'] && <Spinner />}
         {t('toolbar.fetch')}
       </button>
       {branchName === null ? (
-        <button className={btn} disabled={!repo} onClick={() => setBranchName('')}>
+        <button className={btn} disabled={!repo || gitBusy} onClick={() => setBranchName('')}>
           {t('toolbar.branch')} +
         </button>
       ) : (
@@ -241,7 +250,7 @@ export function Toolbar() {
       {stashMessage === null ? (
         <button
           className={btn}
-          disabled={!repo || !status || status.files.length === 0 || !!pending['stash']}
+          disabled={!repo || !status || status.files.length === 0 || !!pending['stash'] || gitBusy}
           onClick={() => setStashMessage('')}
         >
           {pending['stash'] && <Spinner />}
@@ -274,6 +283,7 @@ export function Toolbar() {
           className={btn}
           disabled={!repo}
           title={t('bookmark.toggle')}
+          aria-label={t('bookmark.toggle')}
           onClick={() => repo && setBookmarks(toggleBookmark(repo.path, repo.name))}
         >
           <span className={bookmarked ? 'text-yellow-400' : 'text-zinc-400'}>

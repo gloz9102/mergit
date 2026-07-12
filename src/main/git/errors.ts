@@ -16,6 +16,8 @@ const CHECKOUT_BLOCKED_HEADERS = [
   /Your local changes to the following files would be overwritten by (?:checkout|switch):/i,
   /The following untracked working tree files would be overwritten by (?:checkout|switch):/i
 ]
+const REMOTE_ERROR_PATTERN =
+  /could not read from remote repository|correct access rights|repository not found|couldn't find remote ref|no upstream|unable to access|could not resolve host/i
 
 export function toGitError(err: unknown): GitErrorDto {
   if (err instanceof GitServiceError) {
@@ -42,8 +44,7 @@ export function toGitError(err: unknown): GitErrorDto {
   else if (/conflict|충돌/i.test(detail)) code = 'CONFLICT'
   else if (/authentication|permission denied|could not read username|인증/i.test(detail)) code = 'AUTH'
   else if (/not a git repository|저장소가 아닙니다/i.test(detail)) code = 'NOT_A_REPO'
-  else if (/couldn't find remote ref|no upstream|unable to access|could not resolve host/i.test(detail))
-    code = 'REMOTE'
+  else if (REMOTE_ERROR_PATTERN.test(detail)) code = 'REMOTE'
   else if (/no repository open/i.test(detail)) code = 'NO_REPO'
   const error: GitErrorDto = { code, message, detail }
   if (checkoutBlocked) error.paths = parseCheckoutBlockedPaths(detail)

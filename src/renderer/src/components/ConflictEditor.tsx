@@ -9,6 +9,7 @@ import {
 } from '../../../shared/conflicts'
 import type { ConflictChoice, ConflictSegment } from '../../../shared/types'
 import { run, toastError } from '../lib/run'
+import { useDialogA11y } from '../lib/useDialogA11y'
 import { useUiStore } from '../stores/uiStore'
 import { CodeEditor } from './CodeEditor'
 
@@ -32,10 +33,13 @@ export function ConflictEditor() {
   const file = useUiStore((s) => s.conflictFile)
   const openConflict = useUiStore((s) => s.openConflict)
   const pushToast = useUiStore((s) => s.pushToast)
+  const ask = useUiStore((s) => s.ask)
+  const gitBusy = useUiStore((s) => s.gitMutation !== null)
   const [draft, setDraft] = useState<ConflictDraft | null>(null)
   const [focus, setFocus] = useState(0) // 현재 충돌 블록 인덱스
   const blockRefs = useRef<(HTMLDivElement | null)[]>([])
   const requestIdRef = useRef(0)
+  const dialogRef = useDialogA11y(!!file && !!draft, requestClose)
 
   useEffect(() => {
     if (!file) {
@@ -84,7 +88,15 @@ export function ConflictEditor() {
 
   function toggle(index: number, side: 'ours' | 'theirs'): void {
     if (!draft || draft.loading) return
-    if (draft.manualEdited && !window.confirm(t('merge.discardManualConfirm'))) return
+    if (draft.manualEdited) {
+      ask(t('merge.discardManualConfirm'), () => applyChoice(index, side))
+      return
+    }
+    applyChoice(index, side)
+  }
+
+  function applyChoice(index: number, side: 'ours' | 'theirs'): void {
+    if (!draft || draft.loading) return
     const next = draft.choices.map((choice, i) => (i === index ? toggleChoice(choice, side) : choice))
     setDraft({
       ...draft,
@@ -92,6 +104,17 @@ export function ConflictEditor() {
       output: buildOutput(draft.segments, next),
       manualEdited: false
     })
+  }
+
+  function requestClose(): void {
+    const dirty = !!draft && !draft.loading && (
+      draft.manualEdited || draft.choices.some((choice) => choice !== 'unresolved')
+    )
+    if (dirty) {
+      ask(t('merge.discardDraftConfirm'), () => openConflict(null))
+      return
+    }
+    openConflict(null)
   }
 
   function jump(delta: number): void {
@@ -182,9 +205,16 @@ export function ConflictEditor() {
   }
 
   return (
-    <div className="fixed inset-0 z-30 flex flex-col bg-zinc-900 p-3">
-      <div className="mb-2 flex items-center gap-3">
-        <span className="font-mono text-sm font-semibold">{file}</span>
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="conflict-editor-title"
+      tabIndex={-1}
+      className="fixed inset-0 z-30 flex flex-col bg-zinc-900 p-3"
+    >
+      <div className="mb-2 flex flex-wrap items-center gap-3">
+        <span id="conflict-editor-title" className="font-mono text-sm font-semibold">{file}</span>
         <span className="text-sm text-amber-300">{t('merge.resolved', { resolved, total })}</span>
         {currentDraft.loading ? <span className="text-xs text-zinc-500">{t('merge.loadingFile')}</span> : null}
         <button onClick={() => jump(-1)} className="rounded px-2 py-1 text-xs hover:bg-zinc-700">
@@ -195,13 +225,14 @@ export function ConflictEditor() {
         </button>
         <div className="ml-auto flex gap-2">
           <button
-            onClick={() => openConflict(null)}
+            data-dialog-initial-focus
+            onClick={requestClose}
             className="rounded px-3 py-1 text-sm hover:bg-zinc-700"
           >
             {t('common.close')}
           </button>
           <button
-            disabled={!canSave}
+            disabled={gitBusy || !canSave}
             onClick={() => void saveDraft()}
             className="rounded bg-emerald-700 px-3 py-1 text-sm font-semibold hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
           >

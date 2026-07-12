@@ -29,6 +29,13 @@ api['onRepoWatchError'] = (cb: (error: RepoWatchErrorDto) => void) => {
   ipcRenderer.on('repo-watch-error', listener)
   return () => ipcRenderer.removeListener('repo-watch-error', listener)
 }
+api['onAppCloseRequested'] = (cb: () => void) => {
+  const listener = (): void => cb()
+  ipcRenderer.on('app-close-requested', listener)
+  return () => ipcRenderer.removeListener('app-close-requested', listener)
+}
+api['confirmWindowClose'] = () =>
+  ipcRenderer.invoke('app:confirmWindowClose').then((res: Envelope) => unwrap(res))
 api['focusOpenRepo'] = (path: string) =>
   ipcRenderer.invoke('git:focusOpenRepo', path).then((res: Envelope) => unwrap(res))
 

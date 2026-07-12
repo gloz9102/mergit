@@ -20,7 +20,7 @@ export function RightPanel() {
       ) : selected?.type === 'wip' && hasWip ? (
         <StagingPanel />
       ) : (
-        <p className="p-4 text-sm text-zinc-500">{t('panel.noCommitSelected')}</p>
+        <p className="p-4 text-sm text-zinc-400">{t('panel.noCommitSelected')}</p>
       )}
     </div>
   )

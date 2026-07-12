@@ -82,6 +82,20 @@ describe('toGitError', () => {
     expect(toGitError(error).detail).toContain('stderr text')
   })
 
+  it('원격 저장소 접근 실패를 REMOTE로 분류한다', () => {
+    const error = toGitError(
+      new Error(
+        [
+          'fatal: Could not read from remote repository.',
+          'Please make sure you have the correct access rights',
+          'and the repository exists.'
+        ].join('\n')
+      )
+    )
+
+    expect(error.code).toBe('REMOTE')
+  })
+
   it('오류 detail의 URL credential은 사용자에게 노출하지 않는다', () => {
     const error = toGitError(
       new Error('fatal: unable to access https://user:secret@example.com/private.git/')

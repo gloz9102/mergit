@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { assignLanes } from '../../../shared/lanes'
 import type { CommitDto, HistoryOrder } from '../../../shared/types'
 import { commitRefBadges } from '../lib/commitRefs'
+import { commitSearchCacheKey } from '../lib/commitSearch'
 import { substringMatch } from '../lib/fuzzy'
 import { buildGraphEdgeIndex, visibleGraphEdges } from '../lib/graphEdges'
 import { run, toastError } from '../lib/run'
@@ -33,6 +34,7 @@ export function GraphView() {
   const { t } = useTranslation()
   const commits = useRepoStore((s) => s.commits)
   const repoPath = useRepoStore((s) => s.repo?.path ?? null)
+  const repoGeneration = useRepoStore((s) => s.repoGeneration)
   const historyVersion = useRepoStore((s) => s.historyVersion)
   const historyOptions = useRepoStore((s) => s.historyOptions)
   const setHistoryOptions = useRepoStore((s) => s.setHistoryOptions)
@@ -48,6 +50,7 @@ export function GraphView() {
   const ask = useUiStore((s) => s.ask)
   const pushToast = useUiStore((s) => s.pushToast)
   const searchPending = useUiStore((s) => s.pending['commitSearch'])
+  const gitBusy = useUiStore((s) => s.gitMutation !== null)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const queryText = commitQuery?.text ?? ''
 
@@ -100,6 +103,7 @@ export function GraphView() {
   const [searching, setSearching] = useState(false)
   const [currentMatch, setCurrentMatch] = useState<string | null>(null)
   const jumping = useRef(false)
+  useEffect(() => setCurrentMatch(null), [queryText, repoPath, repoGeneration, historyOptions])
   useEffect(() => {
     const requestId = ++commitSearchRequestId
     if (!queryText || !repoPath) {
@@ -107,7 +111,13 @@ export function GraphView() {
       setSearching(false)
       return
     }
-    const cacheKey = `${repoPath}\x00${historyVersion}\x00${historyOptions.order}\x00${historyOptions.all ? 'all' : 'current'}\x00${queryText}`
+    const cacheKey = commitSearchCacheKey(
+      repoPath,
+      repoGeneration,
+      historyVersion,
+      historyOptions,
+      queryText
+    )
     const cached = commitSearchCache.get(cacheKey)
     if (cached) {
       setMatches(new Set(cached))
@@ -135,7 +145,7 @@ export function GraphView() {
         })
     }, 300)
     return () => clearTimeout(timer)
-  }, [queryText, repoPath, historyVersion, historyOptions])
+  }, [queryText, repoPath, repoGeneration, historyVersion, historyOptions])
 
   function changeHistoryOrder(order: HistoryOrder): void {
     setHistoryOptions({ order }).catch(toastError)
@@ -249,7 +259,7 @@ export function GraphView() {
   return (
     <div className="relative flex min-w-0 flex-1 flex-col border-r border-zinc-700">
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-zinc-700 bg-zinc-900 px-3">
-        <span className="shrink-0 text-xs font-semibold uppercase text-zinc-500">
+        <span className="shrink-0 text-xs font-semibold uppercase text-zinc-400">
           {t('history.title')}
         </span>
         <div
@@ -401,7 +411,7 @@ export function GraphView() {
                         row.commit.subject
                       )}
                     </span>
-                    <span className="ml-auto shrink-0 text-xs text-zinc-500">
+                    <span className="ml-auto shrink-0 text-xs text-zinc-400">
                       {isMatch ? (
                         <Highlight
                           text={row.commit.author}
@@ -431,7 +441,7 @@ export function GraphView() {
         <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
           <MenuItem
             label={t('commit.cherryPick')}
-            disabled={menu.commit.hash === headHash || status?.operation != null}
+            disabled={gitBusy || menu.commit.hash === headHash || status?.operation != null}
             onClick={() => {
               cherryPickCommit(menu.commit)
               setMenu(null)
@@ -439,7 +449,7 @@ export function GraphView() {
           />
           <MenuItem
             label={t('commit.revert')}
-            disabled={status?.operation != null}
+            disabled={gitBusy || status?.operation != null}
             onClick={() => {
               revertCommit(menu.commit)
               setMenu(null)
@@ -450,6 +460,7 @@ export function GraphView() {
             danger
             disabled={
               menu.commit.hash !== headHash ||
+              gitBusy ||
               status?.operation != null ||
               menu.commit.parents.length === 0
             }

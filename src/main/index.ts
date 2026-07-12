@@ -1,13 +1,15 @@
-import { app, BrowserWindow, Menu } from 'electron'
+import { app, autoUpdater, BrowserWindow, Menu } from 'electron'
 import { join } from 'node:path'
 import icon from '../../resources/icon.png?asset'
 import { registerIpc } from './ipc'
-import { attachQuitConfirmation, resetQuitConfirmation } from './windowLifecycle'
+import { allowUpdateQuit, attachQuitConfirmation, resetQuitConfirmation } from './windowLifecycle'
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
+    minWidth: 800,
+    minHeight: 600,
     title: `Mergit v${app.getVersion()}`,
     // 창/작업표시줄 아이콘 (Windows·Linux, dev 포함 — macOS는 무시)
     icon,
@@ -29,6 +31,7 @@ function createWindow(): BrowserWindow {
 // 패키징 전 dev 실행에서도 앱 이름이 Mergit으로 잡히게 한다
 // (macOS dev의 메뉴바 앱 이름은 Electron 바이너리 번들명이라 패키징해야 바뀐다)
 app.setName('Mergit')
+autoUpdater.on('before-quit-for-update', allowUpdateQuit)
 
 app.whenReady().then(() => {
   resetQuitConfirmation()

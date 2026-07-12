@@ -3,6 +3,7 @@
     "openRepo": "저장소 열기",
     "openRepoNewWindow": "새 창으로 저장소 열기",
     "noRepo": "git 저장소를 열어 시작하세요",
+    "quitConfirm": "Mergit을 종료할까요?",
     "recentRepos": "최근 저장소"
   },
   "toolbar": {
@@ -91,6 +92,7 @@
     "resolveAllBeforeSave": "모든 충돌 블록을 해결한 뒤 저장할 수 있습니다",
     "conflictMarkersRemain": "결과에 충돌 marker가 남아 있어 저장할 수 없습니다",
     "discardManualConfirm": "직접 수정한 결과를 버리고 선택 항목으로 다시 생성할까요?",
+    "discardDraftConfirm": "저장하지 않은 충돌 해결 내용을 버리고 닫을까요?",
     "prev": "이전 충돌",
     "next": "다음 충돌"
   },
@@ -166,7 +168,10 @@
     "cancel": "취소",
     "close": "닫기",
     "detail": "상세 보기",
-    "discardConfirm": "'{{name}}' 파일의 변경 사항을 되돌릴까요? 복구할 수 없습니다."
+    "discardConfirm": "'{{name}}' 파일의 변경 사항을 되돌릴까요? 복구할 수 없습니다.",
+    "discardTrackedConfirm": "'{{name}}' 파일의 스테이지되지 않은 변경을 되돌릴까요?",
+    "discardPartialConfirm": "'{{name}}' 파일의 스테이지되지 않은 변경만 되돌릴까요? 스테이지된 변경은 유지됩니다.",
+    "discardUntrackedConfirm": "추적되지 않은 '{{name}}' 파일을 삭제할까요? 복구할 수 없습니다."
   },
   "error": {
     "GIT_ERROR": "Git 작업이 실패했습니다",

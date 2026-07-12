@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { toastError } from '../lib/run'
 import { useUiStore } from '../stores/uiStore'
+import { useDialogA11y } from '../lib/useDialogA11y'
 
 export function UpdateModal() {
   const { t } = useTranslation()
@@ -10,6 +11,7 @@ export function UpdateModal() {
   const pushToast = useUiStore((s) => s.pushToast)
   const pending = useUiStore((s) => s.pending)
   const setPending = useUiStore((s) => s.setPending)
+  const dialogRef = useDialogA11y(show, dismiss)
   if (!show) return null
 
   async function download(): Promise<void> {
@@ -28,8 +30,9 @@ export function UpdateModal() {
     try {
       await window.api.installDownloadedUpdate()
     } catch (err) {
-      setPending('updateInstall', false)
       toastError(err)
+    } finally {
+      setPending('updateInstall', false)
     }
   }
 
@@ -49,8 +52,8 @@ export function UpdateModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-96 rounded-lg border border-zinc-600 bg-zinc-800 p-4 text-sm shadow-xl">
-        <p className="font-semibold">{t('update.modalTitle')}</p>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="update-dialog-title" tabIndex={-1} className="w-[calc(100%_-_2rem)] max-w-96 rounded-lg border border-zinc-600 bg-zinc-800 p-4 text-sm shadow-xl">
+        <p id="update-dialog-title" className="font-semibold">{t('update.modalTitle')}</p>
         {update.status === 'available' && (
           <>
             <p className="mt-3 text-zinc-300">

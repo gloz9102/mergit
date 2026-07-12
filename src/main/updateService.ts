@@ -195,9 +195,10 @@ export class UpdateService {
       this.broadcast({ status: 'checking', currentVersion: this.getVersion() })
     })
     this.updater.on('update-available', (info) => {
+      const keepDownloaded = this.downloaded && this.latestInfo?.version === info.version
       this.latestInfo = info
-      this.downloaded = false
-      this.broadcast(this.toEvent(info, 'available', true, true))
+      this.downloaded = keepDownloaded
+      this.broadcast(this.toEvent(info, keepDownloaded ? 'downloaded' : 'available', true, true))
     })
     this.updater.on('update-not-available', (info) => {
       this.latestInfo = null

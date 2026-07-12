@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { realpath } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import {
   GIT_API_METHODS,
@@ -12,12 +13,14 @@ import { GitServiceError, toGitError } from './git/errors'
 import { GitService } from './git/gitService'
 import { RepoWatcher } from './git/repoWatcher'
 import { getUpdateService, UpdateServiceError } from './updateService'
+import { confirmWindowClose } from './windowLifecycle'
 
 // 창(webContents)마다 독립된 git 세션 — 멀티 윈도우에서 서로 다른 저장소를 연다
 interface Session {
   service: GitService
   watcher: RepoWatcher
   win: BrowserWindow | null
+  canonicalPath: string
 }
 const sessions = new Map<number, Session>()
 
@@ -55,7 +58,7 @@ const GIT_SERVICE_HANDLERS = {
   diffWorkingFile: (service, ...args) => service.diffWorkingFile(...args),
   stage: (service, ...args) => service.stage(...args),
   unstage: (service, ...args) => service.unstage(...args),
-  discard: (service, ...args) => service.discard(...args),
+  discardUnstaged: (service, ...args) => service.discardUnstaged(...args),
   commit: (service, ...args) => service.commit(...args),
   lastCommitMessage: (service) => service.lastCommitMessage(),
   undoLastCommit: (service) => service.undoLastCommit(),
@@ -82,8 +85,9 @@ const GIT_SERVICE_HANDLERS = {
   saveResolved: (service, ...args) => service.saveResolved(...args)
 } satisfies GitServiceHandlers
 
-function normalizeRepoPath(path: string): string {
-  return resolve(path)
+async function canonicalRepoPath(path: string): Promise<string> {
+  const canonical = await realpath(resolve(path))
+  return process.platform === 'win32' ? canonical.toLowerCase() : canonical
 }
 
 function focusWindow(win: BrowserWindow): void {
@@ -93,12 +97,13 @@ function focusWindow(win: BrowserWindow): void {
   win.focus()
 }
 
-function focusOpenRepo(path: string): boolean {
-  const normalized = normalizeRepoPath(path)
+async function focusOpenRepo(path: string): Promise<boolean> {
+  const canonical = await canonicalRepoPath(path).catch(() => null)
+  if (!canonical) return false
   for (const session of sessions.values()) {
     const win = session.win
     if (!win || win.isDestroyed()) continue
-    if (normalizeRepoPath(session.service.repoPath) !== normalized) continue
+    if (session.canonicalPath !== canonical) continue
     focusWindow(win)
     return true
   }
@@ -130,14 +135,18 @@ export function registerIpc(createWindow: () => BrowserWindow): void {
     openRepoRequestSeq.set(senderId, requestSeq)
     try {
       const next = new GitService(path)
-      const info = await next.info()
+      const [info, watchPaths, canonicalPath] = await Promise.all([
+        next.info(),
+        next.watchPaths(),
+        canonicalRepoPath(path)
+      ])
       if (openRepoRequestSeq.get(senderId) !== requestSeq) {
         return { ok: true, data: info }
       }
       const win = BrowserWindow.fromWebContents(event.sender)
       let session = sessions.get(senderId)
       if (!session) {
-        session = { service: next, watcher: new RepoWatcher(), win }
+        session = { service: next, watcher: new RepoWatcher(), win, canonicalPath }
         sessions.set(senderId, session)
         win?.once('closed', () => {
           sessions.get(senderId)?.watcher.stop()
@@ -147,8 +156,9 @@ export function registerIpc(createWindow: () => BrowserWindow): void {
       } else {
         session.service = next
         session.win = win
+        session.canonicalPath = canonicalPath
       }
-      session.watcher.start(path, (scope) => {
+      session.watcher.start(watchPaths, (scope) => {
         if (!win || win.isDestroyed()) return
         win.webContents.send('repo-changed', scope)
       }, (watchError) => {
@@ -164,7 +174,7 @@ export function registerIpc(createWindow: () => BrowserWindow): void {
   // 새 창을 만들고, 그 창이 시작할 때 열 저장소 경로를 예약해 둔다
   ipcMain.handle('git:openRepoWindow', async (_event, path: string): Promise<Envelope> => {
     try {
-      if (focusOpenRepo(path)) return { ok: true, data: null }
+      if (await focusOpenRepo(path)) return { ok: true, data: null }
       const win = createWindow()
       const id = win.webContents.id
       pendingRepoPaths.set(id, path)
@@ -177,7 +187,7 @@ export function registerIpc(createWindow: () => BrowserWindow): void {
 
   ipcMain.handle('git:focusOpenRepo', async (_event, path: string): Promise<Envelope> => {
     try {
-      return { ok: true, data: focusOpenRepo(path) }
+      return { ok: true, data: await focusOpenRepo(path) }
     } catch (err) {
       return { ok: false, error: toGitError(err) }
     }
@@ -193,6 +203,12 @@ export function registerIpc(createWindow: () => BrowserWindow): void {
   // ── app:* 채널 (git 세션 불필요) ──
   ipcMain.handle('app:getAppVersion', async (): Promise<Envelope> => {
     return { ok: true, data: app.getVersion() }
+  })
+
+  ipcMain.handle('app:confirmWindowClose', async (event): Promise<Envelope> => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (win) confirmWindowClose(win)
+    return { ok: true, data: null }
   })
 
   ipcMain.handle('app:checkForUpdates', async (_event, options?: UpdateCheckOptions): Promise<Envelope> => {

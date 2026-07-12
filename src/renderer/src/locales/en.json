@@ -3,6 +3,7 @@
     "openRepo": "Open Repository",
     "openRepoNewWindow": "Open Repository in New Window",
     "noRepo": "Open a git repository to get started",
+    "quitConfirm": "Quit Mergit?",
     "recentRepos": "Recent repositories"
   },
   "toolbar": {
@@ -91,6 +92,7 @@
     "resolveAllBeforeSave": "Resolve every conflict block before saving",
     "conflictMarkersRemain": "Conflict markers remain in the output",
     "discardManualConfirm": "Discard manual edits and regenerate from selections?",
+    "discardDraftConfirm": "Discard the unsaved conflict resolution and close?",
     "prev": "Prev conflict",
     "next": "Next conflict"
   },
@@ -166,7 +168,10 @@
     "cancel": "Cancel",
     "close": "Close",
     "detail": "Details",
-    "discardConfirm": "Discard changes in '{{name}}'? This cannot be undone."
+    "discardConfirm": "Discard changes in '{{name}}'? This cannot be undone.",
+    "discardTrackedConfirm": "Discard unstaged changes in '{{name}}'?",
+    "discardPartialConfirm": "Discard only unstaged changes in '{{name}}'? Staged changes will be preserved.",
+    "discardUntrackedConfirm": "Delete untracked file '{{name}}'? This cannot be undone."
   },
   "error": {
     "GIT_ERROR": "Git operation failed",
