@@ -22,7 +22,7 @@ function makeCheckoutBlockedRepo(): string {
 
 describe('GitService', () => {
   it('info: git 저장소가 아니면 throw', async () => {
-    const svc = new GitService('/tmp')
+    const svc = new GitService(mkdtempSync(join(tmpdir(), 'gkc-not-repo-')))
     await expect(svc.info()).rejects.toThrow()
   })
 
