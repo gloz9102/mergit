@@ -2,6 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ConflictFileDto } from '../../../../shared/types'
 import '../../i18n'
 import { useUiStore } from '../../stores/uiStore'
 import { ConflictEditor } from '../ConflictEditor'
@@ -33,7 +34,8 @@ end
 `
 
 interface TestApi {
-  readWorkingFile: ReturnType<typeof vi.fn>
+  readConflictFile: ReturnType<typeof vi.fn>
+  resolveConflictSide: ReturnType<typeof vi.fn>
   saveResolved: ReturnType<typeof vi.fn>
 }
 
@@ -43,7 +45,8 @@ let api: TestApi
 beforeEach(() => {
   localStorage.setItem('lang', 'en')
   api = {
-    readWorkingFile: vi.fn(),
+    readConflictFile: vi.fn(),
+    resolveConflictSide: vi.fn().mockResolvedValue(undefined),
     saveResolved: vi.fn().mockResolvedValue(undefined)
   }
   Object.defineProperty(window, 'api', {
@@ -72,9 +75,9 @@ afterEach(() => {
 
 describe('ConflictEditor', () => {
   it('늦게 도착한 이전 파일 응답으로 현재 draft를 덮지 않는다', async () => {
-    const a = deferred<string>()
-    const b = deferred<string>()
-    api.readWorkingFile.mockImplementation((path: string) => (path === 'a.txt' ? a.promise : b.promise))
+    const a = deferred<ConflictFileDto>()
+    const b = deferred<ConflictFileDto>()
+    api.readConflictFile.mockImplementation((path: string) => (path === 'a.txt' ? a.promise : b.promise))
     const { container } = renderEditor()
 
     act(() => useUiStore.getState().openConflict('a.txt'))
@@ -83,13 +86,13 @@ describe('ConflictEditor', () => {
     await flush()
 
     await act(async () => {
-      b.resolve(B_CONTENT)
+      b.resolve(conflictFile('b.txt', B_CONTENT))
       await b.promise
     })
     expect(output(container).value).toContain('B ours')
 
     await act(async () => {
-      a.resolve(A_CONTENT)
+      a.resolve(conflictFile('a.txt', A_CONTENT))
       await a.promise
     })
     expect(output(container).value).toContain('B ours')
@@ -97,7 +100,7 @@ describe('ConflictEditor', () => {
   })
 
   it('미해결 draft는 저장할 수 없고 해결 후에만 저장 버튼을 연다', async () => {
-    api.readWorkingFile.mockResolvedValue(A_CONTENT)
+    api.readConflictFile.mockResolvedValue(conflictFile('a.txt', A_CONTENT))
     const { container } = renderEditor()
 
     act(() => useUiStore.getState().openConflict('a.txt'))
@@ -114,7 +117,7 @@ describe('ConflictEditor', () => {
   })
 
   it('수동 수정 후 선택 변경은 확인 없이 output을 덮지 않는다', async () => {
-    api.readWorkingFile.mockResolvedValue(A_CONTENT)
+    api.readConflictFile.mockResolvedValue(conflictFile('a.txt', A_CONTENT))
     const { container } = renderEditor()
 
     act(() => useUiStore.getState().openConflict('a.txt'))
@@ -134,7 +137,7 @@ describe('ConflictEditor', () => {
   })
 
   it('선택한 draft를 닫을 때 폐기 확인을 요청한다', async () => {
-    api.readWorkingFile.mockResolvedValue(A_CONTENT)
+    api.readConflictFile.mockResolvedValue(conflictFile('a.txt', A_CONTENT))
     const { container } = renderEditor()
     act(() => useUiStore.getState().openConflict('a.txt'))
     await flush()
@@ -149,7 +152,53 @@ describe('ConflictEditor', () => {
     expect(useUiStore.getState().conflictFile).toBe('a.txt')
     expect(useUiStore.getState().confirm?.message).toContain('Discard the unsaved')
   })
+
+  it('바이너리 충돌은 텍스트로 저장하지 않고 선택한 전체 버전으로 해결한다', async () => {
+    api.readConflictFile.mockResolvedValue({
+      path: 'image.bin',
+      kind: 'binary',
+      content: null,
+      oursExists: true,
+      theirsExists: true
+    } satisfies ConflictFileDto)
+    const { container } = renderEditor()
+
+    act(() => useUiStore.getState().openConflict('image.bin'))
+    await flush()
+
+    expect(container.querySelector('textarea')).toBeNull()
+    const useTheirs = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      button.textContent?.includes('Use theirs')
+    )
+    if (!useTheirs) throw new Error('use theirs button not found')
+    await act(async () => useTheirs.click())
+
+    expect(api.resolveConflictSide).toHaveBeenCalledWith('image.bin', 'theirs')
+    expect(api.saveResolved).not.toHaveBeenCalled()
+    expect(useUiStore.getState().conflictFile).toBeNull()
+  })
+
+  it('marker가 없는 텍스트 충돌도 파일 전체 선택만 허용한다', async () => {
+    api.readConflictFile.mockResolvedValue(conflictFile('deleted.txt', 'plain text\n', false))
+    const { container } = renderEditor()
+
+    act(() => useUiStore.getState().openConflict('deleted.txt'))
+    await flush()
+
+    expect(container.textContent).toContain('no text conflict markers')
+    expect(container.querySelector('textarea')).toBeNull()
+  })
 })
+
+function conflictFile(path: string, content: string, theirsExists = true): ConflictFileDto {
+  return {
+    path,
+    kind: 'text',
+    content,
+    oursExists: true,
+    theirsExists
+  }
+}
 
 function renderEditor(): { container: HTMLDivElement } {
   const container = document.createElement('div')

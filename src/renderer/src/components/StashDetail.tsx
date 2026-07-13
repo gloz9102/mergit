@@ -18,6 +18,7 @@ export function StashDetail({ oid }: { oid: string }) {
   const { t } = useTranslation()
   const refresh = useRepoStore((s) => s.refresh)
   const stash = useRepoStore((s) => s.stashes.find((item) => item.oid === oid))
+  const stashExists = !!stash
   const ask = useUiStore((s) => s.ask)
   const select = useUiStore((s) => s.select)
   const gitBusy = useUiStore((s) => s.gitMutation !== null)
@@ -27,7 +28,7 @@ export function StashDetail({ oid }: { oid: string }) {
   useEffect(() => {
     let ignore = false
     setFiles([])
-    if (!stash) return
+    if (!stashExists) return
     setLoading(true)
     window.api
       .stashFiles(oid)
@@ -35,8 +36,13 @@ export function StashDetail({ oid }: { oid: string }) {
         if (!ignore) setFiles(result)
       })
       .catch((err) => {
+        if (ignore) return
         toastError(err)
         void refresh({ stashes: true })
+          .then(() => {
+            if (!useRepoStore.getState().stashes.some((item) => item.oid === oid)) select(null)
+          })
+          .catch(toastError)
       })
       .finally(() => {
         if (!ignore) setLoading(false)
@@ -44,7 +50,7 @@ export function StashDetail({ oid }: { oid: string }) {
     return () => {
       ignore = true
     }
-  }, [oid, refresh, stash])
+  }, [oid, refresh, select, stashExists])
 
   if (!stash) return null
   const stashMessage = stash.message

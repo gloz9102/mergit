@@ -167,8 +167,10 @@ export function GraphView() {
       if (dir === 1) {
         target = idxs.find((i) => i > curIdx)
         while (target === undefined && useRepoStore.getState().hasMoreCommits) {
+          const previousLength = list.length
           await useRepoStore.getState().loadMore()
           list = useRepoStore.getState().commits
+          if (list.length === previousLength) break
           idxs = matchIdxs(list)
           target = idxs.find((i) => i > curIdx)
         }
@@ -176,7 +178,17 @@ export function GraphView() {
       } else {
         const anchor = curIdx === -1 ? Number.POSITIVE_INFINITY : curIdx
         target = [...idxs].reverse().find((i) => i < anchor)
-        target ??= idxs[idxs.length - 1] // 처음이면 마지막으로 래핑 (로드 범위 내)
+        if (target === undefined || curIdx === -1) {
+          while (useRepoStore.getState().hasMoreCommits) {
+            const previousLength = list.length
+            await useRepoStore.getState().loadMore()
+            list = useRepoStore.getState().commits
+            if (list.length === previousLength) break
+          }
+          idxs = matchIdxs(list)
+          target = [...idxs].reverse().find((i) => i < anchor)
+        }
+        target ??= idxs[idxs.length - 1]
       }
       if (target !== undefined) {
         const hash = list[target].hash

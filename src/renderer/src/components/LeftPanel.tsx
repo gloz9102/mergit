@@ -246,10 +246,7 @@ export function LeftPanel() {
             data-branch-query
             autoFocus
             value={branchQuery.text}
-            onChange={(e) =>
-              // 브랜치 이름은 ASCII 기반이므로 한글 입력은 제거한다
-              setBranchQueryText(e.target.value.replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]/g, ''))
-            }
+            onChange={(e) => setBranchQueryText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
                 e.preventDefault()
@@ -376,11 +373,12 @@ export function LeftPanel() {
 }
 
 function OverflowRow({ result }: { result: LimitedList<unknown> }) {
+  const { t } = useTranslation()
   if (result.hiddenCount === 0) return null
   return (
     <div
       className="rounded px-1 py-0.5 text-sm text-zinc-500"
-      title={`${result.hiddenCount} hidden`}
+      title={t('common.hiddenCount', { count: result.hiddenCount })}
     >
       ...
     </div>

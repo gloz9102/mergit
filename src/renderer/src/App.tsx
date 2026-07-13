@@ -11,13 +11,17 @@ import { DiffPanel } from './components/DiffPanel'
 import { ResizeHandle } from './components/ResizeHandle'
 import { RightPanel } from './components/RightPanel'
 import { MergeBanner } from './components/MergeBanner'
-import { SettingsModal } from './components/SettingsModal'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { Toasts } from './components/Toasts'
-import { UpdateModal } from './components/UpdateModal'
 
 const ConflictEditor = lazy(() =>
   import('./components/ConflictEditor').then((module) => ({ default: module.ConflictEditor }))
+)
+const SettingsModal = lazy(() =>
+  import('./components/SettingsModal').then((module) => ({ default: module.SettingsModal }))
+)
+const UpdateModal = lazy(() =>
+  import('./components/UpdateModal').then((module) => ({ default: module.UpdateModal }))
 )
 
 const clamp = (v: number, min: number, max: number): number => Math.min(max, Math.max(min, v))
@@ -186,8 +190,10 @@ export default function App() {
           <ConflictEditor />
         </Suspense>
       )}
-      <SettingsModal />
-      <UpdateModal />
+      <Suspense fallback={null}>
+        <SettingsModal />
+        <UpdateModal />
+      </Suspense>
       <ConfirmDialog />
       <Toasts />
     </main>

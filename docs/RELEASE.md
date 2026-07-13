@@ -22,11 +22,11 @@ git add -A && git commit -m "chore: v0.2.0"
 ### 2. 검증 + Windows 빌드
 
 ```bash
-npm test && npm run typecheck
+npm run test:coverage && npm run lint && npm run typecheck
 npm run dist:win
 ```
 
-- 테스트나 typecheck가 실패하면 **여기서 중단**하고 고친 뒤 다시 시작한다.
+- 테스트, coverage, lint, typecheck가 실패하면 **여기서 중단**하고 고친 뒤 다시 시작한다.
 - 성공 시 `release/` 에 Windows 실행 파일과 자동 업데이트 metadata가 생긴다:
   - `Mergit-Setup-<버전>.exe` — 원클릭 설치
   - `Mergit-Portable-<버전>.exe` — 무설치 실행
@@ -70,7 +70,7 @@ gh auth switch -u <기본 계정>
 ## 체크리스트 요약
 
 - [ ] `npm version <버전> --no-git-tag-version` + 커밋
-- [ ] `npm test` / `npm run typecheck` 통과
+- [ ] `npm run test:coverage` / `npm run lint` / `npm run typecheck` 통과
 - [ ] `npm run dist:win` → release/ 에 exe 2개, `latest.yml`, `*.exe.blockmap`
 - [ ] (필요 시 계정 전환 후) `git push`
 - [ ] `gh release create v<버전> <exe 2개> release/latest.yml release/*.exe.blockmap --title --notes`

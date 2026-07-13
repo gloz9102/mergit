@@ -82,6 +82,8 @@ const GIT_SERVICE_HANDLERS = {
   stashPop: (service, ...args) => service.stashPop(...args),
   stashDrop: (service, ...args) => service.stashDrop(...args),
   readWorkingFile: (service, ...args) => service.readWorkingFile(...args),
+  readConflictFile: (service, ...args) => service.readConflictFile(...args),
+  resolveConflictSide: (service, ...args) => service.resolveConflictSide(...args),
   saveResolved: (service, ...args) => service.saveResolved(...args)
 } satisfies GitServiceHandlers
 
@@ -123,17 +125,177 @@ async function invokeServiceHandler<K extends ServiceChannel>(
   return handler(service, ...args) as Promise<Awaited<ReturnType<GitApi[K]>>>
 }
 
+function validateServiceArgs(method: ServiceChannel, args: unknown[]): void {
+  switch (method) {
+    case 'status':
+    case 'branches':
+    case 'lastCommitMessage':
+    case 'undoLastCommit':
+    case 'continueOperation':
+    case 'abortOperation':
+    case 'push':
+    case 'pull':
+    case 'fetch':
+    case 'stashList':
+      assertArgCount(method, args, 0)
+      return
+    case 'log':
+      assertArgCount(method, args, 2, 3)
+      assertNonNegativeInteger(method, args[0])
+      assertPositiveInteger(method, args[1])
+      assertHistoryOptions(method, args[2])
+      return
+    case 'searchCommits':
+      assertArgCount(method, args, 1, 2)
+      assertString(method, args[0])
+      assertHistoryOptions(method, args[1])
+      return
+    case 'stage':
+    case 'unstage':
+    case 'discardUnstaged':
+      assertArgCount(method, args, 1)
+      assertPathArray(method, args[0])
+      return
+    case 'commit':
+      assertArgCount(method, args, 1, 2)
+      assertString(method, args[0])
+      assertOptionalBoolean(method, args[1])
+      return
+    case 'createBranch':
+    case 'deleteBranch':
+      assertArgCount(method, args, 2)
+      assertString(method, args[0], false)
+      assertBoolean(method, args[1])
+      return
+    case 'diffWorkingFile':
+      assertArgCount(method, args, 2)
+      assertString(method, args[0], false)
+      assertBoolean(method, args[1])
+      return
+    case 'stashAndCheckoutBranch':
+      assertArgCount(method, args, 1, 2)
+      assertString(method, args[0], false)
+      assertOptionalPathArray(method, args[1])
+      return
+    case 'stashSave':
+      assertArgCount(method, args, 1, 2)
+      assertString(method, args[0])
+      assertOptionalPathArray(method, args[1])
+      return
+    case 'diffCommitFile':
+    case 'renameBranch':
+    case 'saveResolved':
+      assertArgCount(method, args, 2)
+      assertString(method, args[0], false)
+      assertString(method, args[1])
+      return
+    case 'resolveConflictSide':
+      assertArgCount(method, args, 2)
+      assertString(method, args[0], false)
+      if (args[1] !== 'ours' && args[1] !== 'theirs') invalidArgs(method)
+      return
+    case 'commitFiles':
+    case 'checkoutBranch':
+    case 'merge':
+    case 'cherryPick':
+    case 'revertCommit':
+    case 'stashFiles':
+    case 'stashApply':
+    case 'stashPop':
+    case 'stashDrop':
+    case 'readWorkingFile':
+    case 'readConflictFile':
+      assertArgCount(method, args, 1)
+      assertString(method, args[0], false)
+      return
+  }
+}
+
+function assertArgCount(method: string, args: unknown[], min: number, max = min): void {
+  if (args.length < min || args.length > max) invalidArgs(method)
+}
+
+function assertString(method: string, value: unknown, allowEmpty = true): asserts value is string {
+  if (typeof value !== 'string' || value.length > 16 * 1024 * 1024 || (!allowEmpty && value.length === 0)) {
+    invalidArgs(method)
+  }
+}
+
+function assertBoolean(method: string, value: unknown): asserts value is boolean {
+  if (typeof value !== 'boolean') invalidArgs(method)
+}
+
+function assertOptionalBoolean(method: string, value: unknown): void {
+  if (value !== undefined) assertBoolean(method, value)
+}
+
+function assertNonNegativeInteger(method: string, value: unknown): void {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) invalidArgs(method)
+}
+
+function assertPositiveInteger(method: string, value: unknown): void {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) invalidArgs(method)
+}
+
+function assertPathArray(method: string, value: unknown): asserts value is string[] {
+  if (!Array.isArray(value) || value.length > 10_000) invalidArgs(method)
+  for (const path of value) assertString(method, path, false)
+}
+
+function assertOptionalPathArray(method: string, value: unknown): void {
+  if (value !== undefined) assertPathArray(method, value)
+}
+
+function assertHistoryOptions(method: string, value: unknown): void {
+  if (value === undefined) return
+  if (!value || typeof value !== 'object' || Array.isArray(value)) invalidArgs(method)
+  const options = value as Record<string, unknown>
+  if (
+    Object.keys(options).some((key) => key !== 'order' && key !== 'all') ||
+    (options.order !== 'topo-order' && options.order !== 'date-order') ||
+    typeof options.all !== 'boolean'
+  ) {
+    invalidArgs(method)
+  }
+}
+
+function assertUpdateCheckOptions(value: unknown): asserts value is UpdateCheckOptions | undefined {
+  if (value === undefined) return
+  if (!value || typeof value !== 'object' || Array.isArray(value)) invalidArgs('checkForUpdates')
+  const options = value as Record<string, unknown>
+  if (Object.keys(options).some((key) => key !== 'autoDownload') || typeof options.autoDownload !== 'boolean') {
+    invalidArgs('checkForUpdates')
+  }
+}
+
+function assertUpdateCheckSettings(value: unknown): asserts value is UpdateCheckSettings {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) invalidArgs('configureUpdateChecks')
+  const settings = value as Record<string, unknown>
+  if (
+    Object.keys(settings).some((key) => key !== 'autoCheck' && key !== 'autoDownload') ||
+    typeof settings.autoCheck !== 'boolean' ||
+    typeof settings.autoDownload !== 'boolean'
+  ) {
+    invalidArgs('configureUpdateChecks')
+  }
+}
+
+function invalidArgs(method: string): never {
+  throw new GitServiceError(`invalid IPC arguments for ${method}`, 'GIT_ERROR')
+}
+
 export function registerIpc(createWindow: () => BrowserWindow): void {
   ipcMain.handle('git:selectRepo', async (): Promise<Envelope> => {
     const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
     return { ok: true, data: result.canceled ? null : result.filePaths[0] }
   })
 
-  ipcMain.handle('git:openRepo', async (event, path: string): Promise<Envelope> => {
+  ipcMain.handle('git:openRepo', async (event, path: unknown): Promise<Envelope> => {
     const senderId = event.sender.id
     const requestSeq = (openRepoRequestSeq.get(senderId) ?? 0) + 1
     openRepoRequestSeq.set(senderId, requestSeq)
     try {
+      assertString('openRepo', path, false)
       const next = new GitService(path)
       const [info, watchPaths, canonicalPath] = await Promise.all([
         next.info(),
@@ -172,8 +334,9 @@ export function registerIpc(createWindow: () => BrowserWindow): void {
   })
 
   // 새 창을 만들고, 그 창이 시작할 때 열 저장소 경로를 예약해 둔다
-  ipcMain.handle('git:openRepoWindow', async (_event, path: string): Promise<Envelope> => {
+  ipcMain.handle('git:openRepoWindow', async (_event, path: unknown): Promise<Envelope> => {
     try {
+      assertString('openRepoWindow', path, false)
       if (await focusOpenRepo(path)) return { ok: true, data: null }
       const win = createWindow()
       const id = win.webContents.id
@@ -185,8 +348,9 @@ export function registerIpc(createWindow: () => BrowserWindow): void {
     }
   })
 
-  ipcMain.handle('git:focusOpenRepo', async (_event, path: string): Promise<Envelope> => {
+  ipcMain.handle('git:focusOpenRepo', async (_event, path: unknown): Promise<Envelope> => {
     try {
+      assertString('focusOpenRepo', path, false)
       return { ok: true, data: await focusOpenRepo(path) }
     } catch (err) {
       return { ok: false, error: toGitError(err) }
@@ -211,16 +375,18 @@ export function registerIpc(createWindow: () => BrowserWindow): void {
     return { ok: true, data: null }
   })
 
-  ipcMain.handle('app:checkForUpdates', async (_event, options?: UpdateCheckOptions): Promise<Envelope> => {
+  ipcMain.handle('app:checkForUpdates', async (_event, options: unknown): Promise<Envelope> => {
     try {
+      assertUpdateCheckOptions(options)
       return { ok: true, data: await getUpdateService().checkForUpdates(options) }
     } catch (err) {
       return { ok: false, error: toUpdateError(err) }
     }
   })
 
-  ipcMain.handle('app:configureUpdateChecks', async (_event, settings: UpdateCheckSettings): Promise<Envelope> => {
+  ipcMain.handle('app:configureUpdateChecks', async (_event, settings: unknown): Promise<Envelope> => {
     try {
+      assertUpdateCheckSettings(settings)
       return { ok: true, data: getUpdateService().configureUpdateChecks(settings) }
     } catch (err) {
       return { ok: false, error: toUpdateError(err) }
@@ -254,8 +420,9 @@ export function registerIpc(createWindow: () => BrowserWindow): void {
   })
 
   // 외부 링크 열기 — github.com https URL만 허용(임의 URL 실행 차단)
-  ipcMain.handle('app:openExternal', async (_event, url: string): Promise<Envelope> => {
+  ipcMain.handle('app:openExternal', async (_event, url: unknown): Promise<Envelope> => {
     try {
+      assertString('openExternal', url, false)
       const u = new URL(url)
       if (u.protocol !== 'https:' || u.hostname !== 'github.com') {
         throw new Error(`disallowed url: ${url}`)
@@ -273,6 +440,7 @@ export function registerIpc(createWindow: () => BrowserWindow): void {
       try {
         const service = sessions.get(event.sender.id)?.service
         if (!service) throw new GitServiceError('no repository open', 'NO_REPO')
+        validateServiceArgs(method, args)
         return {
           ok: true,
           data: await invokeServiceHandler(method, service, args as Parameters<GitApi[typeof method]>)

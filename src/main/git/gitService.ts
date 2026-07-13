@@ -1,11 +1,14 @@
 import { access, readFile, realpath, stat, writeFile } from 'node:fs/promises'
-import { basename, isAbsolute, join, relative, resolve } from 'node:path'
+import { isUtf8 } from 'node:buffer'
+import { basename, isAbsolute, relative, resolve } from 'node:path'
 import { simpleGit, type SimpleGit } from 'simple-git'
 import { LOG_FORMAT, parseLog } from '../../shared/logParser'
 import type {
   BranchDto,
   CommitDto,
   CommitFileDto,
+  ConflictFileDto,
+  ConflictSide,
   HistoryOptions,
   RepoInfoDto,
   StashCheckoutResult,
@@ -74,7 +77,7 @@ export class GitService {
 
   async log(skip: number, maxCount: number, options: HistoryOptions = DEFAULT_HISTORY_OPTIONS): Promise<CommitDto[]> {
     return this.coordinator.query('log', async () => {
-      const scopeArgs = options.all ? ['--all'] : ['HEAD']
+      const scopeArgs = await this.historyScopeArgs(options)
       const head = await this.git.raw(['rev-list', '-n', '1', ...scopeArgs]).catch(() => '')
       if (!head.trim()) return [] // 커밋 0개인 저장소
       const raw = await this.git.raw([
@@ -95,7 +98,7 @@ export class GitService {
   async searchCommits(text: string, options: HistoryOptions = DEFAULT_HISTORY_OPTIONS): Promise<string[]> {
     return this.coordinator.query('searchCommits', async () => {
       if (!text) return []
-      const scopeArgs = options.all ? ['--all'] : ['HEAD']
+      const scopeArgs = await this.historyScopeArgs(options)
       const head = await this.git.raw(['rev-list', '-n', '1', ...scopeArgs]).catch(() => '')
       if (!head.trim()) return []
       const [byMessage, byAuthor] = await Promise.all([
@@ -162,15 +165,18 @@ export class GitService {
   }
 
   async diffCommitFile(hash: string, path: string): Promise<string> {
-    return this.coordinator.query('diffCommitFile', () =>
-      this.git.raw(['show', '--format=', hash, '--', path])
-    )
+    return this.coordinator.query('diffCommitFile', () => {
+      const repoRelativePath = normalizeWorktreePath(path)
+      return this.git.raw(['--literal-pathspecs', 'show', '--format=', hash, '--', repoRelativePath])
+    })
   }
 
   async diffWorkingFile(path: string, staged: boolean): Promise<string> {
     return this.coordinator.query('diffWorkingFile', async () => {
       const repoRelativePath = normalizeWorktreePath(path)
-      const args = staged ? ['diff', '--cached', '--', repoRelativePath] : ['diff', '--', repoRelativePath]
+      const args = staged
+        ? ['--literal-pathspecs', 'diff', '--cached', '--', repoRelativePath]
+        : ['--literal-pathspecs', 'diff', '--', repoRelativePath]
       const diff = await this.git.raw(args)
       if (diff.trim()) return diff
       // untracked 파일은 diff가 비므로 전체 내용을 추가 라인으로 표시
@@ -203,21 +209,30 @@ export class GitService {
   async unstage(paths: string[]): Promise<void> {
     return this.coordinator.mutation('unstage', async () => {
       if (paths.length === 0) return
+      const normalizedPaths = normalizeWorktreePaths(paths)
       const head = await this.git.raw(['rev-parse', '--verify', 'HEAD']).catch(() => '')
-      if (head.trim()) await this.git.raw(['restore', '--staged', '--', ...paths])
-      else await this.git.raw(['rm', '--cached', '-f', '--', ...paths])
+      if (head.trim()) {
+        await this.git.raw(['--literal-pathspecs', 'restore', '--staged', '--', ...normalizedPaths])
+      } else {
+        await this.git.raw(['--literal-pathspecs', 'rm', '--cached', '-f', '--', ...normalizedPaths])
+      }
     })
   }
 
   async discardUnstaged(paths: string[]): Promise<void> {
     return this.coordinator.mutation('discardUnstaged', async () => {
       if (paths.length === 0) return
+      const normalizedPaths = normalizeWorktreePaths(paths)
       const s = await this.git.status()
-      const untracked = paths.filter((p) => s.not_added.includes(p))
-      const tracked = paths.filter((p) => !s.not_added.includes(p))
+      const untracked = normalizedPaths.filter((p) => s.not_added.includes(p))
+      const tracked = normalizedPaths.filter((p) => !s.not_added.includes(p))
       // index를 source로 사용해 부분 스테이징된 변경은 보존한다.
-      if (tracked.length) await this.git.raw(['restore', '--worktree', '--', ...tracked])
-      if (untracked.length) await this.git.raw(['clean', '-f', '--', ...untracked])
+      if (tracked.length) {
+        await this.git.raw(['--literal-pathspecs', 'restore', '--worktree', '--', ...tracked])
+      }
+      if (untracked.length) {
+        await this.git.raw(['--literal-pathspecs', 'clean', '-f', '--', ...untracked])
+      }
     })
   }
 
@@ -262,6 +277,13 @@ export class GitService {
       if (await this.isRemoteBranch(name)) {
         const localName = localNameForRemoteBranch(name)
         if (await this.hasLocalBranch(localName)) {
+          const upstream = await this.localBranchUpstream(localName)
+          if (upstream !== name) {
+            throw new GitServiceError(
+              `local branch '${localName}' does not track selected remote branch '${name}'`,
+              'BRANCH_COLLISION'
+            )
+          }
           await this.git.checkout(localName)
         } else {
           await this.git.raw(['checkout', '--track', '-b', localName, name])
@@ -384,7 +406,9 @@ export class GitService {
   async stashSave(message: string, paths?: string[]): Promise<void> {
     return this.coordinator.mutation('stashSave', async () => {
       const args = ['push', '-u', '-m', message || 'WIP']
-      if (paths && paths.length > 0) args.push('--', ...paths)
+      if (paths && paths.length > 0) {
+        args.push('--', ...normalizeWorktreePaths(paths).map(literalPathspec))
+      }
       await this.git.stash(args)
     })
   }
@@ -447,16 +471,95 @@ export class GitService {
     })
   }
 
+  async readConflictFile(path: string): Promise<ConflictFileDto> {
+    return this.coordinator.query('readConflictFile', async () => {
+      const repoRelativePath = normalizeWorktreePath(path)
+      await this.ensureConflicted(repoRelativePath)
+      const stages = await this.conflictStages(repoRelativePath)
+      let buffer: Buffer | null = null
+      try {
+        const { absolutePath } = await this.resolveExistingWorktreePath(repoRelativePath)
+        buffer = await readFile(absolutePath)
+      } catch (err) {
+        if (!isMissingFileError(err)) throw err
+      }
+      const binary = !buffer || buffer.includes(0) || !isUtf8(buffer)
+      return {
+        path: repoRelativePath,
+        kind: binary ? 'binary' : 'text',
+        content: binary || !buffer ? null : buffer.toString('utf-8'),
+        oursExists: stages.has(2),
+        theirsExists: stages.has(3)
+      }
+    })
+  }
+
+  async resolveConflictSide(path: string, side: ConflictSide): Promise<void> {
+    return this.coordinator.mutation('resolveConflictSide', async () => {
+      const repoRelativePath = normalizeWorktreePath(path)
+      await this.ensureConflicted(repoRelativePath)
+      const stages = await this.conflictStages(repoRelativePath)
+      const stage = side === 'ours' ? 2 : 3
+      if (stages.has(stage)) {
+        await this.git.raw([
+          '--literal-pathspecs',
+          'checkout',
+          side === 'ours' ? '--ours' : '--theirs',
+          '--',
+          repoRelativePath
+        ])
+        await this.addPaths([repoRelativePath])
+      } else {
+        await this.git.raw([
+          '--literal-pathspecs',
+          'rm',
+          '-f',
+          '--ignore-unmatch',
+          '--',
+          repoRelativePath
+        ])
+      }
+    })
+  }
+
   async saveResolved(path: string, content: string): Promise<void> {
     return this.coordinator.mutation('saveResolved', async () => {
       const { repoRelativePath, absolutePath } = await this.resolveExistingWorktreePath(path)
+      await this.ensureConflicted(repoRelativePath)
+      const current = await readFile(absolutePath)
+      if (current.includes(0) || !isUtf8(current)) {
+        throw new GitServiceError('binary or non-UTF-8 conflict file cannot be edited as text', 'CONFLICT')
+      }
       await writeFile(absolutePath, content, 'utf-8')
       await this.addPaths([repoRelativePath])
     })
   }
 
   private async addPaths(paths: string[]): Promise<void> {
-    await this.git.raw(['add', '--', ...paths])
+    await this.git.raw(['--literal-pathspecs', 'add', '--', ...normalizeWorktreePaths(paths)])
+  }
+
+  private async historyScopeArgs(options: HistoryOptions): Promise<string[]> {
+    if (!options.all) return ['HEAD']
+    const head = await this.git.raw(['rev-parse', '--verify', 'HEAD']).catch(() => '')
+    return ['--branches', '--remotes', ...(head.trim() ? ['HEAD'] : [])]
+  }
+
+  private async ensureConflicted(path: string): Promise<void> {
+    const status = await this.git.status()
+    if (!status.conflicted.includes(path)) {
+      throw new GitServiceError(`file is not currently conflicted: ${path}`, 'CONFLICT')
+    }
+  }
+
+  private async conflictStages(path: string): Promise<Set<number>> {
+    const raw = await this.git.raw(['--literal-pathspecs', 'ls-files', '-u', '-z', '--', path])
+    const stages = new Set<number>()
+    for (const record of raw.split('\0')) {
+      const stage = Number(record.match(/^\d+ [0-9a-f]+ ([123])\t/)?.[1])
+      if (stage >= 1 && stage <= 3) stages.add(stage)
+    }
+    return stages
   }
 
   private async resolveExistingWorktreePath(path: string): Promise<ResolvedWorktreePath> {
@@ -491,6 +594,15 @@ export class GitService {
     return this.git.raw(['show-ref', '--verify', `refs/heads/${name}`])
       .then(() => true)
       .catch(() => false)
+  }
+
+  private async localBranchUpstream(name: string): Promise<string | null> {
+    const raw = await this.git.raw([
+      'for-each-ref',
+      '--format=%(upstream:short)',
+      `refs/heads/${name}`
+    ])
+    return raw.trim() || null
   }
 
   private async currentOperation(): Promise<StatusDto['operation']> {
@@ -530,10 +642,27 @@ function normalizeWorktreePath(path: string): string {
     throw new Error(`path escapes repository: ${path}`)
   }
   const parts = slashPath.split('/').filter((part) => part && part !== '.')
-  if (parts.length === 0 || parts.some((part) => part === '..' || part === '.git')) {
+  if (
+    parts.length === 0 ||
+    parts.some(
+      (part) => part === '..' || part === '.git' || (process.platform === 'win32' && part.toLowerCase() === '.git')
+    )
+  ) {
     throw new Error(`path escapes repository: ${path}`)
   }
   return parts.join('/')
+}
+
+function normalizeWorktreePaths(paths: string[]): string[] {
+  return paths.map(normalizeWorktreePath)
+}
+
+function literalPathspec(path: string): string {
+  return `:(literal)${path}`
+}
+
+function isMissingFileError(err: unknown): boolean {
+  return err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT'
 }
 
 function isContainedPath(root: string, target: string): boolean {

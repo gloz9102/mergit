@@ -126,6 +126,32 @@ describe('app IPC', () => {
     expect(electronMock.shell.openExternal).not.toHaveBeenCalled()
   })
 
+  it('서비스 IPC는 런타임 인자 형식이 잘못되면 실행 전에 거부한다', async () => {
+    const dir = makeRepo()
+    const win = {
+      webContents: { id: 70 },
+      once: vi.fn(),
+      isDestroyed: vi.fn(() => false)
+    } as unknown as BrowserWindow
+    electronMock.browserWindow.fromWebContents.mockReturnValue(win)
+    expect(((await handler('git:openRepo')({ sender: { id: 70 } }, dir)) as Envelope).ok).toBe(true)
+
+    const res = (await handler('git:stage')({ sender: { id: 70 } }, 'a.txt')) as Envelope
+
+    expect(res.ok).toBe(false)
+    expect((res as { ok: false; error: { code: string; detail: string } }).error).toMatchObject({
+      code: 'GIT_ERROR',
+      detail: 'invalid IPC arguments for stage'
+    })
+  })
+
+  it('custom IPC도 저장소 경로 타입을 검증한다', async () => {
+    const res = (await handler('git:openRepo')({ sender: { id: 71 } }, 123)) as Envelope
+
+    expect(res.ok).toBe(false)
+    expect((res as { ok: false; error: { detail: string } }).error.detail).toBe('invalid IPC arguments for openRepo')
+  })
+
   it('openRepoWindow: 이미 열린 저장소는 새 창 대신 기존 창을 포커스한다', async () => {
     const dir = makeRepo()
     const existingWindow = {

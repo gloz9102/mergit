@@ -90,7 +90,7 @@ macOS / Linux는 아직 패키지를 제공하지 않습니다. 아래 "소스�
 
 ## 소스에서 실행
 
-요구 사항: Node.js 20+, git
+요구 사항: Node.js 22.12+, git
 
 ```bash
 git clone https://github.com/gloz9102/mergit.git

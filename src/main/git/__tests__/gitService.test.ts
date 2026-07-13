@@ -61,6 +61,18 @@ describe('GitService', () => {
     expect(allBranches.map((c) => c.subject)).toContain('feature only')
   })
 
+  it('log 전체 범위는 stash 내부 커밋을 히스토리에 포함하지 않는다', async () => {
+    const dir = makeRepo()
+    writeFileSync(join(dir, 'a.txt'), 'stashed content\n')
+    const svc = new GitService(dir)
+
+    await svc.stashSave('hidden stash subject')
+
+    const commits = await svc.log(0, 100, { order: 'topo-order', all: true })
+    expect(commits.map((commit) => commit.subject)).toEqual(['initial'])
+    expect(await svc.searchCommits('hidden stash', { order: 'topo-order', all: true })).toEqual([])
+  })
+
   it('searchCommits: 메시지를 대소문자 무시 부분 일치로 찾는다', async () => {
     const dir = makeRepo()
     const svc = new GitService(dir)
@@ -270,6 +282,22 @@ describe('GitService', () => {
     expect(status.tracking).toBe('origin/feature')
   })
 
+  it('checkoutBranch: 같은 이름의 로컬 브랜치가 다른 upstream이면 원격 선택을 거부한다', async () => {
+    const dir = makeRepo()
+    const remoteDir = mkdtempSync(join(tmpdir(), 'gkc-remote-'))
+    const git = gitIn(dir)
+    gitIn(remoteDir)('init', '--bare', '-b', 'main')
+    git('remote', 'add', 'origin', remoteDir)
+    git('push', 'origin', 'main')
+    git('push', 'origin', 'main:feature')
+    git('branch', 'feature', 'main')
+    git('fetch', 'origin')
+    const svc = new GitService(dir)
+
+    await expect(svc.checkoutBranch('origin/feature')).rejects.toMatchObject({ code: 'BRANCH_COLLISION' })
+    expect((await svc.status()).current).toBe('main')
+  })
+
   it('checkoutBranch: 대상 브랜치가 로컬 변경을 덮어쓰면 실패한다', async () => {
     const dir = makeCheckoutBlockedRepo()
     const svc = new GitService(dir)
@@ -367,6 +395,87 @@ describe('GitService', () => {
     expect(commits[0].parents).toHaveLength(2)
   })
 
+  it('바이너리 충돌은 텍스트로 읽거나 저장하지 않고 선택한 원본 바이트로 해결한다', async () => {
+    const dir = makeRepo()
+    const git = gitIn(dir)
+    writeFileSync(join(dir, 'image.bin'), Buffer.from([0, 1, 2]))
+    git('add', 'image.bin')
+    git('commit', '-m', 'add binary')
+    git('checkout', '-b', 'feature')
+    writeFileSync(join(dir, 'image.bin'), Buffer.from([0, 3, 4]))
+    git('commit', '-am', 'feature binary')
+    git('checkout', 'main')
+    writeFileSync(join(dir, 'image.bin'), Buffer.from([0, 5, 6]))
+    git('commit', '-am', 'main binary')
+    const svc = new GitService(dir)
+    await svc.merge('feature')
+
+    const conflict = await svc.readConflictFile('image.bin')
+    expect(conflict).toEqual({
+      path: 'image.bin',
+      kind: 'binary',
+      content: null,
+      oursExists: true,
+      theirsExists: true
+    })
+    await expect(svc.saveResolved('image.bin', 'corrupted\n')).rejects.toThrow(/binary|UTF-8/i)
+
+    await svc.resolveConflictSide('image.bin', 'theirs')
+
+    expect((await svc.status()).conflicted).toEqual([])
+    expect(readFileSync(join(dir, 'image.bin'))).toEqual(Buffer.from([0, 3, 4]))
+  })
+
+  it('NUL이 없는 비 UTF-8 충돌도 텍스트 저장을 차단하고 원본 바이트를 보존한다', async () => {
+    const dir = makeRepo()
+    const git = gitIn(dir)
+    writeFileSync(join(dir, 'legacy.txt'), Buffer.from([0x61, 0xff, 0x0a]))
+    git('add', 'legacy.txt')
+    git('commit', '-m', 'add legacy encoding')
+    git('checkout', '-b', 'feature')
+    writeFileSync(join(dir, 'legacy.txt'), Buffer.from([0x62, 0xff, 0x0a]))
+    git('commit', '-am', 'feature legacy')
+    git('checkout', 'main')
+    const ours = Buffer.from([0x63, 0xff, 0x0a])
+    writeFileSync(join(dir, 'legacy.txt'), ours)
+    git('commit', '-am', 'main legacy')
+    const svc = new GitService(dir)
+    await svc.merge('feature')
+
+    expect(await svc.readConflictFile('legacy.txt')).toMatchObject({ kind: 'binary', content: null })
+    await expect(svc.saveResolved('legacy.txt', 'corrupted\n')).rejects.toThrow(/binary|UTF-8/i)
+
+    await svc.resolveConflictSide('legacy.txt', 'ours')
+
+    expect(readFileSync(join(dir, 'legacy.txt'))).toEqual(ours)
+    expect((await svc.status()).conflicted).toEqual([])
+  })
+
+  it('modify/delete 충돌은 marker 없이도 삭제 쪽 전체 버전으로 해결한다', async () => {
+    const dir = makeRepo()
+    const git = gitIn(dir)
+    git('checkout', '-b', 'feature')
+    git('rm', 'a.txt')
+    git('commit', '-m', 'delete file')
+    git('checkout', 'main')
+    writeFileSync(join(dir, 'a.txt'), 'main changed\n')
+    git('commit', '-am', 'main changes file')
+    const svc = new GitService(dir)
+    await svc.merge('feature')
+
+    expect(await svc.readConflictFile('a.txt')).toMatchObject({
+      kind: 'text',
+      content: 'main changed\n',
+      oursExists: true,
+      theirsExists: false
+    })
+
+    await svc.resolveConflictSide('a.txt', 'theirs')
+
+    expect(existsSync(join(dir, 'a.txt'))).toBe(false)
+    expect((await svc.status()).conflicted).toEqual([])
+  })
+
   it('abortOperation: 머지 전 상태로 돌아간다', async () => {
     const dir = makeConflictRepo()
     const svc = new GitService(dir)
@@ -454,14 +563,21 @@ describe('GitService', () => {
     expect(await svc.stashList()).toEqual([])
   })
 
-  it('saveResolved: 옵션처럼 생긴 파일명 외의 변경은 스테이징하지 않는다', async () => {
+  it('saveResolved: 옵션처럼 생긴 충돌 파일명 외의 변경은 스테이징하지 않는다', async () => {
     const dir = makeRepo()
     const git = gitIn(dir)
     writeFileSync(join(dir, '--all'), 'base\n')
     git('add', '--', '--all')
     git('commit', '-m', 'add option-like path')
-    writeFileSync(join(dir, 'a.txt'), 'other change\n')
+    git('checkout', '-b', 'feature')
+    writeFileSync(join(dir, '--all'), 'feature\n')
+    git('commit', '-am', 'feature change')
+    git('checkout', 'main')
+    writeFileSync(join(dir, '--all'), 'main\n')
+    git('commit', '-am', 'main change')
     const svc = new GitService(dir)
+    await svc.merge('feature')
+    writeFileSync(join(dir, 'a.txt'), 'other change\n')
 
     await svc.saveResolved('--all', 'resolved\n')
 
@@ -640,6 +756,9 @@ describe('GitService', () => {
     await expect(svc.saveResolved('../outside.txt', 'changed\n')).rejects.toThrow(/repository/i)
     await expect(svc.diffWorkingFile('../outside.txt', false)).rejects.toThrow(/repository/i)
     await expect(svc.readWorkingFile('.git/config')).rejects.toThrow(/repository/i)
+    if (process.platform === 'win32') {
+      await expect(svc.readWorkingFile('.GIT/config')).rejects.toThrow(/repository/i)
+    }
     expect(readFileSync(outside, 'utf-8')).toBe('outside\n')
   })
 

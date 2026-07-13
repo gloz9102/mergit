@@ -1,7 +1,10 @@
 import type { ConflictChoice, ConflictSegment } from './types'
 
-// git 구분자는 정확히 7개의 '=' (CRLF 파일은 후행 \r 허용)
+// git marker는 정확히 7개 기호 뒤에 label 또는 줄 끝이 온다.
+const isStart = (l: string): boolean => /^<<<<<<<(?:\s.*)?\r?$/.test(l)
 const isSeparator = (l: string): boolean => /^=======\r?$/.test(l)
+const isBase = (l: string): boolean => /^\|\|\|\|\|\|\|(?:\s.*)?\r?$/.test(l)
+const isEnd = (l: string): boolean => /^>>>>>>>(?:\s.*)?\r?$/.test(l)
 
 export function parseConflicts(content: string): ConflictSegment[] {
   const lines = content.split('\n')
@@ -11,7 +14,7 @@ export function parseConflicts(content: string): ConflictSegment[] {
 
   while (i < lines.length) {
     const line = lines[i]
-    if (line.startsWith('<<<<<<<')) {
+    if (isStart(line)) {
       if (context.length) {
         segments.push({ type: 'context', lines: context })
         context = []
@@ -19,18 +22,18 @@ export function parseConflicts(content: string): ConflictSegment[] {
       const oursLabel = line.slice(7).trim()
       const ours: string[] = []
       i++
-      while (i < lines.length && !isSeparator(lines[i]) && !lines[i].startsWith('|||||||')) {
+      while (i < lines.length && !isSeparator(lines[i]) && !isBase(lines[i])) {
         ours.push(lines[i])
         i++
       }
       // diff3 스타일 base 섹션은 ======= 까지 건너뛴다
       // ours 수집 루프는 ||||||| 에서 멈추므로 여기서 base 섹션을 ======= 직전까지 소진한다
-      if (i < lines.length && lines[i].startsWith('|||||||')) {
+      if (i < lines.length && isBase(lines[i])) {
         while (i < lines.length && !isSeparator(lines[i])) i++
       }
       i++ // '=======' 건너뛰기
       const theirs: string[] = []
-      while (i < lines.length && !lines[i].startsWith('>>>>>>>')) {
+      while (i < lines.length && !isEnd(lines[i])) {
         theirs.push(lines[i])
         i++
       }
@@ -86,7 +89,22 @@ export function validateConflictResolution(
 }
 
 export function hasConflictMarkers(content: string): boolean {
-  return /^(<<<<<<<|=======|>>>>>>>)(?:\s|$|\r$)/m.test(content)
+  let state: 'context' | 'ours' | 'theirs' = 'context'
+  for (const line of content.split('\n')) {
+    if (isStart(line)) {
+      if (state !== 'context') return true
+      state = 'ours'
+      continue
+    }
+    if (isSeparator(line) && state === 'ours') {
+      state = 'theirs'
+      continue
+    }
+    if (isEnd(line)) {
+      return true
+    }
+  }
+  return state !== 'context'
 }
 
 function conflictMarkerLines(seg: Extract<ConflictSegment, { type: 'conflict' }>): string[] {

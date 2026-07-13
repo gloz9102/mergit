@@ -71,7 +71,7 @@
     "orderLabel": "Commit order",
     "topo-order": "topo-order",
     "date-order": "date-order",
-    "all": "--all"
+    "all": "All branches"
   },
   "merge": {
     "inProgress": "Merge in progress",
@@ -94,7 +94,13 @@
     "discardManualConfirm": "Discard manual edits and regenerate from selections?",
     "discardDraftConfirm": "Discard the unsaved conflict resolution and close?",
     "prev": "Prev conflict",
-    "next": "Next conflict"
+    "next": "Next conflict",
+    "binaryFile": "This conflict is binary or not UTF-8. Choose the version to apply to the whole file.",
+    "wholeFileConflict": "This file has no text conflict markers. Choose the version to apply to the whole file.",
+    "useOurs": "Use ours",
+    "useTheirs": "Use theirs",
+    "keepWholeFile": "Keep the entire file from this version",
+    "deleteWholeFile": "Delete the file because it does not exist in this version"
   },
   "stash": {
     "apply": "Apply",
@@ -168,6 +174,7 @@
     "cancel": "Cancel",
     "close": "Close",
     "detail": "Details",
+    "hiddenCount": "{{count}} hidden item(s)",
     "discardConfirm": "Discard changes in '{{name}}'? This cannot be undone.",
     "discardTrackedConfirm": "Discard unstaged changes in '{{name}}'?",
     "discardPartialConfirm": "Discard only unstaged changes in '{{name}}'? Staged changes will be preserved.",
@@ -176,6 +183,7 @@
   "error": {
     "GIT_ERROR": "Git operation failed",
     "CHECKOUT_BLOCKED": "Local changes prevent checkout",
+    "BRANCH_COLLISION": "A local branch with the same name tracks a different remote branch",
     "CONFLICT": "Conflicts detected",
     "AUTH": "Authentication failed. Check your system git credential helper / SSH keys",
     "NOT_A_REPO": "Not a git repository",

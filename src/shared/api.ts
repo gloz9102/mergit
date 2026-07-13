@@ -2,6 +2,8 @@ import type {
   BranchDto,
   CommitDto,
   CommitFileDto,
+  ConflictFileDto,
+  ConflictSide,
   HistoryOptions,
   RepoInfoDto,
   StashCheckoutResult,
@@ -112,6 +114,8 @@ export interface GitApi {
   stashPop(oid: string): Promise<void>
   stashDrop(oid: string): Promise<void>
   readWorkingFile(path: string): Promise<string>
+  readConflictFile(path: string): Promise<ConflictFileDto>
+  resolveConflictSide(path: string, side: ConflictSide): Promise<void>
   saveResolved(path: string, content: string): Promise<void>
   onRepoChanged(cb: (scope?: RefreshScope) => void): () => void
   onRepoWatchError(cb: (error: RepoWatchErrorDto) => void): () => void
@@ -167,6 +171,8 @@ export const GIT_API_METHODS = [
   'stashPop',
   'stashDrop',
   'readWorkingFile',
+  'readConflictFile',
+  'resolveConflictSide',
   'saveResolved'
 ] as const
 

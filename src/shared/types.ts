@@ -69,6 +69,7 @@ export type CommitFileDto = FileChangeDto
 export type GitErrorCode =
   | 'GIT_ERROR'
   | 'CHECKOUT_BLOCKED'
+  | 'BRANCH_COLLISION'
   | 'CONFLICT'
   | 'AUTH'
   | 'NOT_A_REPO'
@@ -95,3 +96,13 @@ export type ConflictSegment =
     }
 
 export type ConflictChoice = 'unresolved' | 'ours' | 'theirs' | 'both'
+
+export type ConflictSide = 'ours' | 'theirs'
+
+export interface ConflictFileDto {
+  path: string
+  kind: 'text' | 'binary'
+  content: string | null
+  oursExists: boolean
+  theirsExists: boolean
+}

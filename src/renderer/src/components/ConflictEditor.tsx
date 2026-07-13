@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   buildOutput,
@@ -11,7 +11,10 @@ import type { ConflictChoice, ConflictSegment } from '../../../shared/types'
 import { run, toastError } from '../lib/run'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { useUiStore } from '../stores/uiStore'
-import { CodeEditor } from './CodeEditor'
+
+const CodeEditor = lazy(() =>
+  import('./CodeEditor').then((module) => ({ default: module.CodeEditor }))
+)
 
 const SIDE_CLS = {
   ours: { header: 'bg-emerald-950 text-emerald-300', body: 'bg-emerald-950/50', border: 'border-emerald-400' },
@@ -22,6 +25,9 @@ interface ConflictDraft {
   file: string
   requestId: number
   loading: boolean
+  kind: 'text' | 'binary'
+  oursExists: boolean
+  theirsExists: boolean
   segments: ConflictSegment[]
   choices: ConflictChoice[]
   output: string
@@ -49,17 +55,32 @@ export function ConflictEditor() {
     const requestId = ++requestIdRef.current
     let active = true
     setFocus(0)
-    setDraft({ file, requestId, loading: true, segments: [], choices: [], output: '', manualEdited: false })
+    setDraft({
+      file,
+      requestId,
+      loading: true,
+      kind: 'text',
+      oursExists: false,
+      theirsExists: false,
+      segments: [],
+      choices: [],
+      output: '',
+      manualEdited: false
+    })
     window.api
-      .readWorkingFile(file)
-      .then((content) => {
+      .readConflictFile(file)
+      .then((conflictFile) => {
         if (!active || requestId !== requestIdRef.current || useUiStore.getState().conflictFile !== file) return
+        const content = conflictFile.content ?? ''
         const segs = parseConflicts(content)
         const init = segs.filter((s) => s.type === 'conflict').map((): ConflictChoice => 'unresolved')
         setDraft({
           file,
           requestId,
           loading: false,
+          kind: conflictFile.kind,
+          oursExists: conflictFile.oursExists,
+          theirsExists: conflictFile.theirsExists,
           segments: segs,
           choices: init,
           output: buildOutput(segs, init),
@@ -79,11 +100,15 @@ export function ConflictEditor() {
 
   const total = useMemo(() => countConflicts(draft?.segments ?? []), [draft?.segments])
   const resolved = countResolved(draft?.choices ?? [])
+  const wholeFile = !!draft && !draft.loading && (draft.kind === 'binary' || total === 0)
+  const textEditor = !!draft && !draft.loading && !wholeFile
   const canSave =
     !!file &&
     !!draft &&
     !draft.loading &&
     draft.file === file &&
+    draft.kind === 'text' &&
+    total > 0 &&
     validateConflictResolution(draft.segments, draft.choices, draft.output).ok
 
   function toggle(index: number, side: 'ours' | 'theirs'): void {
@@ -132,7 +157,7 @@ export function ConflictEditor() {
   }
 
   async function saveDraft(): Promise<void> {
-    if (!file || !draft || draft.loading || draft.file !== file) return
+    if (!file || !draft || draft.loading || draft.file !== file || draft.kind !== 'text' || total === 0) return
     const validation = validateConflictResolution(draft.segments, draft.choices, draft.output)
     if (!validation.ok) {
       pushToast(
@@ -146,6 +171,15 @@ export function ConflictEditor() {
     const saveOutput = draft.output
     await run(async () => {
       await window.api.saveResolved(saveFile, saveOutput)
+      openConflict(null)
+    }, 'toast.resolvedSaved')
+  }
+
+  async function resolveWholeFile(side: 'ours' | 'theirs'): Promise<void> {
+    if (!file || !draft || draft.loading || draft.file !== file) return
+    const resolveFile = draft.file
+    await run(async () => {
+      await window.api.resolveConflictSide(resolveFile, side)
       openConflict(null)
     }, 'toast.resolvedSaved')
   }
@@ -215,14 +249,18 @@ export function ConflictEditor() {
     >
       <div className="mb-2 flex flex-wrap items-center gap-3">
         <span id="conflict-editor-title" className="font-mono text-sm font-semibold">{file}</span>
-        <span className="text-sm text-amber-300">{t('merge.resolved', { resolved, total })}</span>
+        {textEditor ? <span className="text-sm text-amber-300">{t('merge.resolved', { resolved, total })}</span> : null}
         {currentDraft.loading ? <span className="text-xs text-zinc-500">{t('merge.loadingFile')}</span> : null}
-        <button onClick={() => jump(-1)} className="rounded px-2 py-1 text-xs hover:bg-zinc-700">
-          ↑ {t('merge.prev')}
-        </button>
-        <button onClick={() => jump(1)} className="rounded px-2 py-1 text-xs hover:bg-zinc-700">
-          ↓ {t('merge.next')}
-        </button>
+        {textEditor ? (
+          <>
+            <button onClick={() => jump(-1)} className="rounded px-2 py-1 text-xs hover:bg-zinc-700">
+              ↑ {t('merge.prev')}
+            </button>
+            <button onClick={() => jump(1)} className="rounded px-2 py-1 text-xs hover:bg-zinc-700">
+              ↓ {t('merge.next')}
+            </button>
+          </>
+        ) : null}
         <div className="ml-auto flex gap-2">
           <button
             data-dialog-initial-focus
@@ -231,23 +269,61 @@ export function ConflictEditor() {
           >
             {t('common.close')}
           </button>
-          <button
-            disabled={gitBusy || !canSave}
-            onClick={() => void saveDraft()}
-            className="rounded bg-emerald-700 px-3 py-1 text-sm font-semibold hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
-          >
-            {t('merge.save')}
-          </button>
+          {textEditor ? (
+            <button
+              disabled={gitBusy || !canSave}
+              onClick={() => void saveDraft()}
+              className="rounded bg-emerald-700 px-3 py-1 text-sm font-semibold hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+            >
+              {t('merge.save')}
+            </button>
+          ) : null}
         </div>
       </div>
-      <div className="flex min-h-0 flex-[3] rounded border border-zinc-700">
-        {column('ours')}
-        {column('theirs')}
-      </div>
-      <p className="mt-2 text-xs uppercase text-zinc-500">{t('merge.output')}</p>
-      <div className="min-h-0 flex-[2] rounded border border-zinc-700">
-        <CodeEditor value={currentDraft.output} onChange={setOutput} />
-      </div>
+      {currentDraft.loading ? (
+        <div role="status" className="flex flex-1 items-center justify-center text-sm text-zinc-500">
+          {t('merge.loadingFile')}
+        </div>
+      ) : wholeFile ? (
+        <div className="flex flex-1 items-center justify-center">
+          <div className="w-full max-w-2xl rounded border border-zinc-700 bg-zinc-800 p-6">
+            <p className="mb-5 text-sm text-zinc-300">
+              {t(currentDraft.kind === 'binary' ? 'merge.binaryFile' : 'merge.wholeFileConflict')}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(['ours', 'theirs'] as const).map((side) => {
+                const exists = side === 'ours' ? currentDraft.oursExists : currentDraft.theirsExists
+                return (
+                  <button
+                    key={side}
+                    disabled={gitBusy}
+                    onClick={() => void resolveWholeFile(side)}
+                    className={`rounded border p-4 text-left disabled:cursor-not-allowed disabled:opacity-50 ${SIDE_CLS[side].border} ${SIDE_CLS[side].body}`}
+                  >
+                    <span className="block font-semibold">{t(`merge.use${side === 'ours' ? 'Ours' : 'Theirs'}`)}</span>
+                    <span className="mt-1 block text-xs text-zinc-400">
+                      {t(exists ? 'merge.keepWholeFile' : 'merge.deleteWholeFile')}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex min-h-0 flex-[3] rounded border border-zinc-700">
+            {column('ours')}
+            {column('theirs')}
+          </div>
+          <p className="mt-2 text-xs uppercase text-zinc-500">{t('merge.output')}</p>
+          <div className="min-h-0 flex-[2] rounded border border-zinc-700">
+            <Suspense fallback={<div className="p-3 text-xs text-zinc-500">{t('merge.loadingFile')}</div>}>
+              <CodeEditor value={currentDraft.output} onChange={setOutput} />
+            </Suspense>
+          </div>
+        </>
+      )}
     </div>
   )
 }

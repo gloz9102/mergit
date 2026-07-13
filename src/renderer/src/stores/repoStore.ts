@@ -59,6 +59,11 @@ let activeGeneration: number | null = null
 let activePromise: Promise<void> | null = null
 let queuedGeneration: number | null = null
 let openRepoRequestId = 0
+let activeLoadMore: {
+  generation: number
+  historyOptionsKey: string
+  promise: Promise<void>
+} | null = null
 
 function normalizeScope(scope?: RefreshScope): NormalizedRefreshScope {
   if (!scope) return { ...FULL_REFRESH }
@@ -253,29 +258,45 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   },
 
   async loadMore() {
-    const { repo, repoGeneration, loadingMore, hasMoreCommits, commits, historyOptions } = get()
-    if (!repo || loadingMore || !hasMoreCommits) return
+    const { repo, repoGeneration, hasMoreCommits, commits, historyOptions } = get()
     const requestHistoryOptionsKey = historyOptionsKey(historyOptions)
-    set({ loadingMore: true })
+    if (
+      activeLoadMore?.generation === repoGeneration &&
+      activeLoadMore.historyOptionsKey === requestHistoryOptionsKey
+    ) {
+      return activeLoadMore.promise
+    }
+    if (!repo || !hasMoreCommits) return
+    const promise = (async () => {
+      set({ loadingMore: true })
+      try {
+        const page = await window.api.log(commits.length, PAGE_SIZE, historyOptions)
+        if (
+          get().repoGeneration !== repoGeneration ||
+          historyOptionsKey(get().historyOptions) !== requestHistoryOptionsKey
+        ) return
+        // 페이지 사이 ref 이동으로 커밋이 경계를 넘을 수 있어 중복을 제거하며 덧붙인다
+        const seen = new Set(get().commits.map((c) => c.hash))
+        const fresh = page.filter((c) => !seen.has(c.hash))
+        set({
+          commits: [...get().commits, ...fresh],
+          hasMoreCommits: page.length === PAGE_SIZE && fresh.length > 0
+        })
+      } finally {
+        if (
+          get().repoGeneration === repoGeneration &&
+          historyOptionsKey(get().historyOptions) === requestHistoryOptionsKey
+        ) {
+          set({ loadingMore: false })
+        }
+      }
+    })()
+    activeLoadMore = { generation: repoGeneration, historyOptionsKey: requestHistoryOptionsKey, promise }
     try {
-      const page = await window.api.log(commits.length, PAGE_SIZE, historyOptions)
-      if (
-        get().repoGeneration !== repoGeneration ||
-        historyOptionsKey(get().historyOptions) !== requestHistoryOptionsKey
-      ) return
-      // 페이지 사이 ref 이동으로 커밋이 경계를 넘을 수 있어 중복을 제거하며 덧붙인다
-      const seen = new Set(get().commits.map((c) => c.hash))
-      const fresh = page.filter((c) => !seen.has(c.hash))
-      set({
-        commits: [...get().commits, ...fresh],
-        hasMoreCommits: page.length === PAGE_SIZE
-      })
+      await promise
     } finally {
-      if (
-        get().repoGeneration === repoGeneration &&
-        historyOptionsKey(get().historyOptions) === requestHistoryOptionsKey
-      ) {
-        set({ loadingMore: false })
+      if (activeLoadMore?.promise === promise) {
+        activeLoadMore = null
       }
     }
   },

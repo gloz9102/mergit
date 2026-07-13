@@ -22,13 +22,13 @@ export function StagingPanel() {
   const savedMessage = useRef('')
 
   // 충돌 파일은 MergeBanner/ConflictEditor가 담당
-  const files = status?.files ?? []
+  const files = status?.files
   const staged = useMemo(
-    () => files.filter((f) => !f.isConflicted && f.index !== ' ' && f.index !== '?'),
+    () => (files ?? []).filter((f) => !f.isConflicted && f.index !== ' ' && f.index !== '?'),
     [files]
   )
   const unstaged = useMemo(
-    () => files.filter((f) => !f.isConflicted && f.workingDir !== ' ' && f.workingDir !== ''),
+    () => (files ?? []).filter((f) => !f.isConflicted && f.workingDir !== ' ' && f.workingDir !== ''),
     [files]
   )
 

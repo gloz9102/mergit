@@ -145,6 +145,34 @@ describe('repoStore.refresh', () => {
     expect(api.log).toHaveBeenCalledWith(1, 500, { order: 'date-order', all: true })
   })
 
+  it('동시에 호출된 loadMore는 같은 요청 완료를 공유한다', async () => {
+    const api = installApi()
+    const page = deferred<CommitDto[]>()
+    api.log.mockReturnValueOnce(page.promise)
+
+    const first = useRepoStore.getState().loadMore()
+    const second = useRepoStore.getState().loadMore()
+    await Promise.resolve()
+
+    expect(api.log).toHaveBeenCalledTimes(1)
+    expect(useRepoStore.getState().loadingMore).toBe(true)
+    page.resolve([])
+    await Promise.all([first, second])
+    expect(useRepoStore.getState().loadingMore).toBe(false)
+  })
+
+  it('중복 페이지로 새 커밋이 늘지 않으면 추가 로딩을 종료한다', async () => {
+    const api = installApi()
+    const commit = { hash: 'a', parents: [], author: 'A', email: 'a@test.com', date: '', subject: 'a', body: '', refs: [] }
+    useRepoStore.setState({ commits: [commit] })
+    api.log.mockResolvedValue(Array.from({ length: 500 }, () => commit))
+
+    await useRepoStore.getState().loadMore()
+
+    expect(useRepoStore.getState().commits).toEqual([commit])
+    expect(useRepoStore.getState().hasMoreCommits).toBe(false)
+  })
+
   it('loadMore: 저장소 전환 후 이전 요청의 finally가 새 loadingMore를 덮지 않는다', async () => {
     const api = installApi()
     const slowLog = deferred<CommitDto[]>()

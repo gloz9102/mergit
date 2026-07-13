@@ -134,4 +134,14 @@ describe('validateConflictResolution', () => {
     expect(hasConflictMarkers(SIMPLE)).toBe(true)
     expect(hasConflictMarkers('line1\nours line\nline2\n')).toBe(false)
   })
+
+  it('일반 문서의 단독 ======= 줄은 conflict marker로 오인하지 않는다', () => {
+    expect(hasConflictMarkers('title\n=======\nbody\n')).toBe(false)
+  })
+
+  it('marker와 비슷하지만 정확하지 않은 줄은 일반 내용으로 취급한다', () => {
+    const content = '<<<<<<<< not a marker\n>>>>>>>> not a marker\n'
+    expect(hasConflictMarkers(content)).toBe(false)
+    expect(parseConflicts(content)).toEqual([{ type: 'context', lines: ['<<<<<<<< not a marker', '>>>>>>>> not a marker', ''] }])
+  })
 })
