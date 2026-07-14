@@ -39,4 +39,23 @@ describe('ConfirmDialog accessibility', () => {
     expect(document.activeElement).toBe(opener)
     act(() => root.unmount())
   })
+
+  it('기본 확인 작업은 두 줄 문구와 primary 동작 색상을 지원한다', () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    act(() => {
+      useUiStore.getState().ask('로그 복사되었습니다.\ngithub 이슈에 업로드 하시겠습니까?', vi.fn(), 'primary')
+      root.render(<ConfirmDialog />)
+    })
+
+    const message = container.querySelector('#confirm-dialog-message')
+    const confirm = container.querySelectorAll('button')[1]
+    expect(message?.textContent).toBe('로그 복사되었습니다.\ngithub 이슈에 업로드 하시겠습니까?')
+    expect(message?.className).toContain('whitespace-pre-line')
+    expect(message?.querySelector('br')).toBe(null)
+    expect(confirm?.className).toContain('bg-emerald-700')
+
+    act(() => root.unmount())
+  })
 })

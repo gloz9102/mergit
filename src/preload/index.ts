@@ -56,6 +56,8 @@ api['onUpdateEvent'] = (cb: (event: UpdateEventDto) => void) => {
   ipcRenderer.on('update-event', listener)
   return () => ipcRenderer.removeListener('update-event', listener)
 }
+api['copyToClipboard'] = (text: string) =>
+  ipcRenderer.invoke('app:copyToClipboard', text).then((res: Envelope) => unwrap(res))
 api['openExternal'] = (url: string) =>
   ipcRenderer.invoke('app:openExternal', url).then((res: Envelope) => unwrap(res))
 

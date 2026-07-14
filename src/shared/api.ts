@@ -129,6 +129,7 @@ export interface GitApi {
   downloadUpdate(): Promise<void>
   installDownloadedUpdate(): Promise<void>
   onUpdateEvent(cb: (event: UpdateEventDto) => void): () => void
+  copyToClipboard(text: string): Promise<void>
   openExternal(url: string): Promise<void>
 }
 
@@ -191,6 +192,7 @@ type IpcMethods = Exclude<
   | 'downloadUpdate'
   | 'installDownloadedUpdate'
   | 'onUpdateEvent'
+  | 'copyToClipboard'
   | 'openExternal'
 >
 type AssertSubset<T extends U, U> = T

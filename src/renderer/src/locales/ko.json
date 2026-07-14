@@ -174,6 +174,8 @@
     "cancel": "취소",
     "close": "닫기",
     "detail": "상세 보기",
+    "copyLog": "로그 복사",
+    "logCopiedIssuePrompt": "로그 복사되었습니다.\ngithub 이슈에 업로드 하시겠습니까?",
     "hiddenCount": "숨겨진 항목 {{count}}개",
     "discardConfirm": "'{{name}}' 파일의 변경 사항을 되돌릴까요? 복구할 수 없습니다.",
     "discardTrackedConfirm": "'{{name}}' 파일의 스테이지되지 않은 변경을 되돌릴까요?",
@@ -190,6 +192,7 @@
     "REMOTE": "원격 저장소 작업에 실패했습니다",
     "NO_REPO": "저장소가 열려 있지 않습니다",
     "WATCHER": "저장소 변경 감시에 실패했습니다",
+    "CLIPBOARD": "로그를 클립보드에 복사하지 못했습니다",
     "UPDATE_FAILED": "업데이트 작업에 실패했습니다",
     "UPDATE_UNSUPPORTED": "이 빌드에서는 자동 업데이트를 사용할 수 없습니다"
   },

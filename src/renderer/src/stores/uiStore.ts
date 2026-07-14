@@ -53,6 +53,7 @@ interface Toast {
 interface ConfirmState {
   message: string
   onConfirm: () => void
+  tone: 'danger' | 'primary'
 }
 
 interface UiState {
@@ -92,7 +93,7 @@ interface UiState {
   setShowSettings(v: boolean): void
   pushToast(message: string, detail?: string, kind?: ToastKind): void
   dismissToast(id: number): void
-  ask(message: string, onConfirm: () => void): void
+  ask(message: string, onConfirm: () => void, tone?: ConfirmState['tone']): void
   closeConfirm(): void
   resetRepoScopedState(): void
   setPending(key: string, value: boolean): void
@@ -248,7 +249,7 @@ export const useUiStore = create<UiState>((set) => ({
   },
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
-  ask: (message, onConfirm) => set({ confirm: { message, onConfirm } }),
+  ask: (message, onConfirm, tone = 'danger') => set({ confirm: { message, onConfirm, tone } }),
   closeConfirm: () => set({ confirm: null }),
   resetRepoScopedState: () =>
     set({

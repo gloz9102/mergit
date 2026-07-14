@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import { realpath } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import {
@@ -416,6 +416,16 @@ export function registerIpc(createWindow: () => BrowserWindow): void {
       return { ok: true, data: null }
     } catch (err) {
       return { ok: false, error: toUpdateError(err) }
+    }
+  })
+
+  ipcMain.handle('app:copyToClipboard', async (_event, text: unknown): Promise<Envelope> => {
+    try {
+      assertString('copyToClipboard', text, false)
+      clipboard.writeText(text)
+      return { ok: true, data: null }
+    } catch (err) {
+      return { ok: false, error: toGitError(err) }
     }
   })
 

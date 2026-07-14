@@ -22,6 +22,7 @@ import {
   getGitCommandCoordinator,
   type GitCommandCoordinator
 } from './gitCommandCoordinator'
+import { configureGitEnvironment } from './gitEnvironment'
 import { parseNameStatus } from './nameStatus'
 import type { RepoWatchPaths } from './repoWatcher'
 
@@ -42,12 +43,14 @@ export class GitService {
   private readonly coordinator: GitCommandCoordinator
 
   constructor(readonly repoPath: string) {
+    // simple-git의 env()는 process.env를 교체하므로 호출하지 않는다.
+    // main 프로세스 로케일만 고정하면 Git 자식 프로세스가 나머지 환경을 정상 상속한다.
+    configureGitEnvironment()
     this.coordinator = getGitCommandCoordinator(repoPath)
     this.git = simpleGit(repoPath, {
       errors: createGitErrorHandler(),
       timeout: { block: DEFAULT_GIT_PROCESS_IDLE_TIMEOUT_MS }
     })
-    this.git.env('LC_ALL', 'C').env('LANG', 'C').env('LANGUAGE', 'C')
   }
 
   async info(): Promise<RepoInfoDto> {

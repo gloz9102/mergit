@@ -16,6 +16,7 @@ const electronMock = vi.hoisted(() => {
         handlers.set(channel, handler)
       })
     },
+    clipboard: { writeText: vi.fn() },
     shell: { openExternal: vi.fn(() => Promise.resolve()) }
   }
 })
@@ -39,6 +40,7 @@ const repoWatcherMock = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   app: electronMock.app,
   BrowserWindow: electronMock.browserWindow,
+  clipboard: electronMock.clipboard,
   dialog: electronMock.dialog,
   ipcMain: electronMock.ipcMain,
   shell: electronMock.shell
@@ -70,6 +72,7 @@ describe('app IPC', () => {
     vi.unstubAllGlobals()
     electronMock.handlers.clear()
     electronMock.app.getVersion.mockReturnValue('0.3.2')
+    electronMock.clipboard.writeText.mockClear()
     electronMock.shell.openExternal.mockClear()
     electronMock.ipcMain.handle.mockClear()
     electronMock.browserWindow.fromWebContents.mockReset()
@@ -124,6 +127,22 @@ describe('app IPC', () => {
 
     expect(res.ok).toBe(false)
     expect(electronMock.shell.openExternal).not.toHaveBeenCalled()
+  })
+
+  it('copyToClipboard: 검증한 문자열을 시스템 클립보드에 기록한다', async () => {
+    const res = (await handler('app:copyToClipboard')({}, 'Remote operation failed\n\nfatal: denied')) as Envelope
+
+    expect(res).toEqual({ ok: true, data: null })
+    expect(electronMock.clipboard.writeText).toHaveBeenCalledWith(
+      'Remote operation failed\n\nfatal: denied'
+    )
+  })
+
+  it('copyToClipboard: 문자열이 아닌 입력은 거부한다', async () => {
+    const res = (await handler('app:copyToClipboard')({}, { detail: 'secret' })) as Envelope
+
+    expect(res.ok).toBe(false)
+    expect(electronMock.clipboard.writeText).not.toHaveBeenCalled()
   })
 
   it('서비스 IPC는 런타임 인자 형식이 잘못되면 실행 전에 거부한다', async () => {

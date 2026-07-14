@@ -19,7 +19,7 @@ export function ConfirmDialog() {
         tabIndex={-1}
         className="w-[calc(100%_-_2rem)] max-w-96 rounded-lg border border-zinc-600 bg-zinc-800 p-4"
       >
-        <p id="confirm-dialog-message" className="text-sm">{confirm.message}</p>
+        <p id="confirm-dialog-message" className="whitespace-pre-line text-sm">{confirm.message}</p>
         <div className="mt-4 flex justify-end gap-2">
           <button data-dialog-initial-focus onClick={close} className="rounded px-3 py-1.5 text-sm hover:bg-zinc-700">
             {t('common.cancel')}
@@ -29,7 +29,11 @@ export function ConfirmDialog() {
               close()
               confirm.onConfirm()
             }}
-            className="rounded bg-red-700 px-3 py-1.5 text-sm hover:bg-red-600"
+            className={`rounded px-3 py-1.5 text-sm ${
+              confirm.tone === 'primary'
+                ? 'bg-emerald-700 font-semibold hover:bg-emerald-600'
+                : 'bg-red-700 hover:bg-red-600'
+            }`}
           >
             {t('common.confirm')}
           </button>
