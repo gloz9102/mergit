@@ -1,7 +1,9 @@
 import { useTranslation } from 'react-i18next'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import type { GitHubAccountStateDto } from '../../../shared/types'
 import { setLanguage } from '../i18n'
 import { toastError } from '../lib/run'
+import { useRepoStore } from '../stores/repoStore'
 import { useUiStore, type LeftPanelSection } from '../stores/uiStore'
 import { useDialogA11y } from '../lib/useDialogA11y'
 
@@ -10,6 +12,7 @@ const GITHUB_REPO_URL = 'https://github.com/gloz9102/mergit'
 
 export function SettingsModal() {
   const { t, i18n } = useTranslation()
+  const repo = useRepoStore((s) => s.repo)
   const show = useUiStore((s) => s.showSettings)
   const setShow = useUiStore((s) => s.setShowSettings)
   const appVersion = useUiStore((s) => s.appVersion)
@@ -28,7 +31,39 @@ export function SettingsModal() {
   const alwaysShowCurrentBranch = useUiStore((s) => s.alwaysShowCurrentBranch)
   const setAlwaysShowCurrentBranch = useUiStore((s) => s.setAlwaysShowCurrentBranch)
   const [customLimitOpen, setCustomLimitOpen] = useState<Partial<Record<LeftPanelSection, boolean>>>({})
+  const [githubState, setGitHubState] = useState<GitHubAccountStateDto | null>(null)
+  const [githubLoading, setGitHubLoading] = useState(false)
+  const [githubSwitching, setGitHubSwitching] = useState(false)
+  const [selectedAccount, setSelectedAccount] = useState('')
   const dialogRef = useDialogA11y(show, () => setShow(false))
+
+  useEffect(() => {
+    if (!show || !repo) {
+      setGitHubState(null)
+      setGitHubLoading(false)
+      setSelectedAccount('')
+      return
+    }
+    let cancelled = false
+    setGitHubLoading(true)
+    void window.api
+      .getGitHubAccountState()
+      .then((state) => {
+        if (cancelled) return
+        setGitHubState(state)
+        setSelectedAccount(state.selectedAccount ?? '')
+      })
+      .catch((err) => {
+        if (!cancelled) toastError(err)
+      })
+      .finally(() => {
+        if (!cancelled) setGitHubLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [repo, show])
+
   if (!show) return null
 
   async function checkUpdate(): Promise<void> {
@@ -44,6 +79,20 @@ export function SettingsModal() {
       toastError(err) // 수동 체크는 실패를 토스트로 알린다
     } finally {
       setPending('updateCheck', false)
+    }
+  }
+
+  async function switchGitHubAccount(): Promise<void> {
+    setGitHubSwitching(true)
+    try {
+      const state = await window.api.switchGitHubAccount(selectedAccount || null)
+      setGitHubState(state)
+      setSelectedAccount(state.selectedAccount ?? '')
+      pushToast(t('github.account.switched'), undefined, 'success')
+    } catch (err) {
+      toastError(err)
+    } finally {
+      setGitHubSwitching(false)
     }
   }
 
@@ -112,6 +161,74 @@ export function SettingsModal() {
           />
           {t('settings.alwaysShowCurrentBranch')}
         </label>
+        <p className="mb-1 mt-4 text-xs uppercase text-zinc-500">{t('github.account.title')}</p>
+        {!repo ? (
+          <p className="text-sm text-zinc-400">{t('github.account.noRepo')}</p>
+        ) : githubLoading ? (
+          <p role="status" className="text-sm text-zinc-400">{t('github.account.loading')}</p>
+        ) : githubState ? (
+          <div className="space-y-2">
+            <div className="grid grid-cols-[72px_1fr] gap-2 text-xs">
+              <span className="text-zinc-500">{t('github.account.remote')}</span>
+              <span className="min-w-0 truncate text-right" title={githubState.remoteName ?? undefined}>
+                {githubState.remoteName ?? '—'}
+              </span>
+              <span className="text-zinc-500">{t('github.account.transport')}</span>
+              <span className="text-right uppercase">{githubState.transport}</span>
+              <span className="text-zinc-500">{t('github.account.current')}</span>
+              <span
+                className="min-w-0 truncate text-right"
+                title={githubState.selectedAccount ?? t('github.account.systemDefault')}
+              >
+                {githubState.selectedAccount ?? t('github.account.systemDefault')}
+              </span>
+            </div>
+            {githubState.remoteUrl && (
+              <p
+                className="break-all rounded bg-zinc-900 px-2 py-1.5 font-mono text-xs text-zinc-400"
+                title={githubState.remoteUrl}
+              >
+                {githubState.remoteUrl}
+              </p>
+            )}
+            {githubState.accountSwitchAvailable ? (
+              <>
+                <label htmlFor="github-account-select" className="block text-xs text-zinc-400">
+                  {t('github.account.select')}
+                </label>
+                <select
+                  id="github-account-select"
+                  value={selectedAccount}
+                  onChange={(event) => setSelectedAccount(event.target.value)}
+                  disabled={githubSwitching}
+                  className="w-full rounded bg-zinc-900 px-2 py-1.5 text-sm outline-none ring-1 ring-zinc-600 focus:ring-emerald-500 disabled:opacity-50"
+                >
+                  <option value="">{t('github.account.systemDefault')}</option>
+                  {githubState.selectedAccount &&
+                    !githubState.accounts.includes(githubState.selectedAccount) && (
+                      <option value={githubState.selectedAccount}>{githubState.selectedAccount}</option>
+                    )}
+                  {githubState.accounts.map((account) => (
+                    <option key={account} value={account}>{account}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void switchGitHubAccount()}
+                  disabled={githubSwitching}
+                  aria-busy={githubSwitching}
+                  className="w-full rounded bg-emerald-700 px-3 py-1.5 text-sm font-semibold hover:bg-emerald-600 disabled:cursor-wait disabled:opacity-50"
+                >
+                  {githubSwitching ? t('github.account.switching') : t('github.account.switch')}
+                </button>
+              </>
+            ) : (
+              <p className="text-sm text-zinc-400">
+                {t(`github.account.unavailable.${githubState.unavailableReason ?? 'NOT_GITHUB'}`)}
+              </p>
+            )}
+          </div>
+        ) : null}
         <p className="mb-1 mt-4 text-xs uppercase text-zinc-500">{t('update.title')}</p>
         <div className="flex items-center justify-between gap-3 text-sm">
           <span className="text-zinc-500">{t('update.version')}</span>

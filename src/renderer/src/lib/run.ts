@@ -7,7 +7,11 @@ export function toastError(err: unknown): void {
   const e = err as Partial<GitErrorDto>
   const key = `error.${e.code ?? 'GIT_ERROR'}`
   const message = i18n.exists(key) ? i18n.t(key) : i18n.t('error.GIT_ERROR')
-  useUiStore.getState().pushToast(message, e.detail ?? e.message, 'error')
+  const errorCode = e.code ?? 'GIT_ERROR'
+  useUiStore.getState().pushToast(message, e.detail ?? e.message, 'error', {
+    errorCode,
+    persistent: errorCode === 'AUTH' || errorCode === 'REMOTE'
+  })
 }
 
 // git 액션 공통 래퍼: 성공 토스트(옵션) + 에러 토스트 + 저장소 데이터 refresh

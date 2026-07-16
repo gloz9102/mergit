@@ -4,6 +4,8 @@ import type {
   CommitFileDto,
   ConflictFileDto,
   ConflictSide,
+  GitHubAccountStateDto,
+  GitHubRecoveryResultDto,
   HistoryOptions,
   RepoInfoDto,
   StashCheckoutResult,
@@ -104,6 +106,9 @@ export interface GitApi {
   revertCommit(hash: string): Promise<{ conflicts: boolean }>
   continueOperation(): Promise<void>
   abortOperation(): Promise<void>
+  getGitHubAccountState(): Promise<GitHubAccountStateDto>
+  switchGitHubAccount(account: string | null): Promise<GitHubAccountStateDto>
+  recoverGitHub(): Promise<GitHubRecoveryResultDto>
   push(): Promise<void>
   pull(): Promise<void>
   fetch(): Promise<void>
@@ -162,6 +167,9 @@ export const GIT_API_METHODS = [
   'revertCommit',
   'continueOperation',
   'abortOperation',
+  'getGitHubAccountState',
+  'switchGitHubAccount',
+  'recoverGitHub',
   'push',
   'pull',
   'fetch',

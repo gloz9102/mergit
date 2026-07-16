@@ -57,6 +57,40 @@ export type StashCheckoutResult =
   | { checkedOut: true; stash: StashDto | null }
   | { checkedOut: false; stash: StashDto | null; error: string }
 
+export type GitHubRemoteTransport = 'https' | 'ssh' | 'other' | 'none'
+
+export type GitHubAccountUnavailableReason =
+  | 'NO_UPSTREAM'
+  | 'NOT_GITHUB'
+  | 'SSH_UNSUPPORTED'
+  | 'GCM_UNAVAILABLE'
+  | 'NO_ACCOUNTS'
+  | 'COMPLEX_REMOTE'
+  | 'CREDENTIAL_IN_URL'
+
+export interface GitHubAccountStateDto {
+  isGitHubRepository: boolean
+  remoteName: string | null
+  remoteUrl: string | null
+  transport: GitHubRemoteTransport
+  accounts: string[]
+  selectedAccount: string | null
+  recoveryAvailable: boolean
+  accountSwitchAvailable: boolean
+  unavailableReason: GitHubAccountUnavailableReason | null
+}
+
+export interface GitHubRecoveryStepDto {
+  command: string
+  output: string
+  status: 'success' | 'failed'
+}
+
+export interface GitHubRecoveryResultDto {
+  steps: GitHubRecoveryStepDto[]
+  transcript: string
+}
+
 export interface FileChangeDto {
   kind: string // 'A' | 'M' | 'D' | 'R' | 'C' 등 name-status 종류
   score?: number

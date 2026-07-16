@@ -72,6 +72,9 @@ const GIT_SERVICE_HANDLERS = {
   revertCommit: (service, ...args) => service.revertCommit(...args),
   continueOperation: (service) => service.continueOperation(),
   abortOperation: (service) => service.abortOperation(),
+  getGitHubAccountState: (service) => service.getGitHubAccountState(),
+  switchGitHubAccount: (service, ...args) => service.switchGitHubAccount(...args),
+  recoverGitHub: (service) => service.recoverGitHub(),
   push: (service) => service.push(),
   pull: (service) => service.pull(),
   fetch: (service) => service.fetch(),
@@ -133,11 +136,17 @@ function validateServiceArgs(method: ServiceChannel, args: unknown[]): void {
     case 'undoLastCommit':
     case 'continueOperation':
     case 'abortOperation':
+    case 'getGitHubAccountState':
+    case 'recoverGitHub':
     case 'push':
     case 'pull':
     case 'fetch':
     case 'stashList':
       assertArgCount(method, args, 0)
+      return
+    case 'switchGitHubAccount':
+      assertArgCount(method, args, 1)
+      assertNullableString(method, args[0])
       return
     case 'log':
       assertArgCount(method, args, 2, 3)
@@ -219,6 +228,10 @@ function assertString(method: string, value: unknown, allowEmpty = true): assert
   if (typeof value !== 'string' || value.length > 16 * 1024 * 1024 || (!allowEmpty && value.length === 0)) {
     invalidArgs(method)
   }
+}
+
+function assertNullableString(method: string, value: unknown): asserts value is string | null {
+  if (value !== null) assertString(method, value, false)
 }
 
 function assertBoolean(method: string, value: unknown): asserts value is boolean {

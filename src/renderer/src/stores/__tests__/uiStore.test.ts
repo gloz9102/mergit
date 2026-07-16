@@ -44,4 +44,15 @@ describe('uiStore update settings', () => {
 
     expect(useUiStore.getState().showUpdateModal).toBe(false)
   })
+
+  it('persistent 토스트는 자동으로 사라지지 않는다', () => {
+    vi.useFakeTimers()
+    useUiStore.setState({ toasts: [] })
+
+    useUiStore.getState().pushToast('복구 결과', 'detail', 'success', { persistent: true })
+    vi.advanceTimersByTime(60_000)
+
+    expect(useUiStore.getState().toasts).toHaveLength(1)
+    vi.useRealTimers()
+  })
 })

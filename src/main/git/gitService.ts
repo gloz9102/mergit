@@ -9,13 +9,16 @@ import type {
   CommitFileDto,
   ConflictFileDto,
   ConflictSide,
+  GitHubAccountStateDto,
+  GitHubRecoveryResultDto,
+  GitHubRecoveryStepDto,
   HistoryOptions,
   RepoInfoDto,
   StashCheckoutResult,
   StashDto,
   StatusDto
 } from '../../shared/types'
-import { GitServiceError } from './errors'
+import { GitServiceError, sanitizeGitDetail, toGitError } from './errors'
 import {
   createGitErrorHandler,
   DEFAULT_GIT_PROCESS_IDLE_TIMEOUT_MS,
@@ -23,6 +26,13 @@ import {
   type GitCommandCoordinator
 } from './gitCommandCoordinator'
 import { configureGitEnvironment } from './gitEnvironment'
+import {
+  accountStateFromSnapshot,
+  parseGcmAccounts,
+  type GitHubCredentialProvider,
+  type GitHubRemoteSnapshot,
+  withGitHubAccount
+} from './githubIntegration'
 import { parseNameStatus } from './nameStatus'
 import type { RepoWatchPaths } from './repoWatcher'
 
@@ -41,8 +51,12 @@ interface ResolvedWorktreePath {
 export class GitService {
   private git: SimpleGit
   private readonly coordinator: GitCommandCoordinator
+  private readonly githubCredentialProvider: GitHubCredentialProvider
 
-  constructor(readonly repoPath: string) {
+  constructor(
+    readonly repoPath: string,
+    githubCredentialProvider?: GitHubCredentialProvider
+  ) {
     // simple-git의 env()는 process.env를 교체하므로 호출하지 않는다.
     // main 프로세스 로케일만 고정하면 Git 자식 프로세스가 나머지 환경을 정상 상속한다.
     configureGitEnvironment()
@@ -51,6 +65,10 @@ export class GitService {
       errors: createGitErrorHandler(),
       timeout: { block: DEFAULT_GIT_PROCESS_IDLE_TIMEOUT_MS }
     })
+    this.githubCredentialProvider = githubCredentialProvider ?? {
+      listAccounts: async () =>
+        parseGcmAccounts(await this.git.raw(['credential-manager', 'github', 'list']))
+    }
   }
 
   async info(): Promise<RepoInfoDto> {
@@ -380,6 +398,131 @@ export class GitService {
     })
   }
 
+  async getGitHubAccountState(): Promise<GitHubAccountStateDto> {
+    return this.coordinator.query('getGitHubAccountState', async () => {
+      const snapshot = await this.githubRemoteSnapshot()
+      const fallbackRemoteUrl = snapshot ? null : await this.fallbackRemoteUrl()
+      let accounts: string[] = []
+      let gcmAvailable = true
+      try {
+        accounts = parseGcmAccounts((await this.githubCredentialProvider.listAccounts()).join('\n'))
+      } catch {
+        gcmAvailable = false
+      }
+      return accountStateFromSnapshot(
+        snapshot,
+        fallbackRemoteUrl,
+        accounts,
+        gcmAvailable
+      )
+    })
+  }
+
+  async switchGitHubAccount(account: string | null): Promise<GitHubAccountStateDto> {
+    return this.coordinator.mutation('switchGitHubAccount', async () => {
+      const state = await this.getGitHubAccountState()
+      if (!state.accountSwitchAvailable || !state.remoteName) {
+        throw new GitServiceError(
+          githubAccountUnavailableMessage(state.unavailableReason),
+          state.unavailableReason === 'GCM_UNAVAILABLE' || state.unavailableReason === 'NO_ACCOUNTS'
+            ? 'AUTH'
+            : 'REMOTE'
+        )
+      }
+      if (account !== null && !state.accounts.includes(account)) {
+        throw new GitServiceError(`GitHub account is not stored in Git Credential Manager: ${account}`, 'AUTH')
+      }
+
+      const snapshot = await this.githubRemoteSnapshot()
+      if (!snapshot || snapshot.fetchUrls.length !== 1 || snapshot.pushUrls.length > 1) {
+        throw new GitServiceError('the current upstream remote has unsupported URL settings', 'REMOTE')
+      }
+      const originalFetchUrl = snapshot.fetchUrls[0]
+      const originalPushUrl = snapshot.pushUrls[0] ?? null
+      const nextFetchUrl = withGitHubAccount(originalFetchUrl, account)
+      const nextPushUrl = originalPushUrl ? withGitHubAccount(originalPushUrl, account) : null
+      let fetchChanged = false
+      let pushChanged = false
+      try {
+        if (nextFetchUrl !== originalFetchUrl) {
+          await this.git.raw(['remote', 'set-url', snapshot.remoteName, nextFetchUrl])
+          fetchChanged = true
+        }
+        if (nextPushUrl && nextPushUrl !== originalPushUrl) {
+          await this.git.raw(['remote', 'set-url', '--push', snapshot.remoteName, nextPushUrl])
+          pushChanged = true
+        }
+      } catch (err) {
+        const rollbackErrors: string[] = []
+        if (pushChanged && originalPushUrl) {
+          await this.git
+            .raw(['remote', 'set-url', '--push', snapshot.remoteName, originalPushUrl])
+            .catch((rollbackErr) => rollbackErrors.push(toGitError(rollbackErr).detail))
+        }
+        if (fetchChanged) {
+          await this.git
+            .raw(['remote', 'set-url', snapshot.remoteName, originalFetchUrl])
+            .catch((rollbackErr) => rollbackErrors.push(toGitError(rollbackErr).detail))
+        }
+        const error = toGitError(err)
+        const rollbackDetail = rollbackErrors.length
+          ? `\nFailed to restore the original remote URL:\n${rollbackErrors.join('\n')}`
+          : ''
+        throw new GitServiceError(`${error.detail}${rollbackDetail}`, error.code)
+      }
+      return this.getGitHubAccountState()
+    })
+  }
+
+  async recoverGitHub(): Promise<GitHubRecoveryResultDto> {
+    return this.coordinator.network('recoverGitHub', async () => {
+      const steps: GitHubRecoveryStepDto[] = []
+      const location = await realpath(this.repoPath)
+      steps.push({
+        command: `cd "${location.replaceAll('"', '""')}"`,
+        output: '',
+        status: 'success'
+      })
+      steps.push({ command: 'Get-Location', output: location, status: 'success' })
+
+      const commands: { command: string; args: string[] }[] = [
+        {
+          command: 'git rev-parse --show-toplevel',
+          args: ['rev-parse', '--show-toplevel']
+        },
+        {
+          command: 'git branch --show-current',
+          args: ['branch', '--show-current']
+        },
+        {
+          command: "git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}'",
+          args: ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']
+        },
+        { command: 'git pull', args: ['pull'] }
+      ]
+
+      for (const item of commands) {
+        try {
+          const output = sanitizeGitDetail((await this.git.raw(item.args)).trim())
+          steps.push({ command: item.command, output, status: 'success' })
+        } catch (err) {
+          const error = toGitError(err)
+          steps.push({
+            command: item.command,
+            output: error.detail,
+            status: 'failed'
+          })
+          throw new GitServiceError(formatRecoveryTranscript(steps), error.code)
+        }
+      }
+
+      return {
+        steps,
+        transcript: formatRecoveryTranscript(steps)
+      }
+    })
+  }
+
   async push(): Promise<void> {
     return this.coordinator.network('push', async () => {
       const s = await this.git.status()
@@ -608,6 +751,40 @@ export class GitService {
     return raw.trim() || null
   }
 
+  private async githubRemoteSnapshot(): Promise<GitHubRemoteSnapshot | null> {
+    const branch = (await this.git.raw(['branch', '--show-current']).catch(() => '')).trim()
+    if (!branch) return null
+    const upstream = (
+      await this.git
+        .raw(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'])
+        .catch(() => '')
+    ).trim()
+    if (!upstream) return null
+    const remoteName = (
+      await this.git.raw(['config', '--get', `branch.${branch}.remote`]).catch(() => '')
+    ).trim()
+    if (!remoteName || remoteName === '.') return null
+    const [fetchUrls, pushUrls] = await Promise.all([
+      this.git
+        .raw(['config', '--get-all', `remote.${remoteName}.url`])
+        .then(configLines)
+        .catch(() => []),
+      this.git
+        .raw(['config', '--get-all', `remote.${remoteName}.pushurl`])
+        .then(configLines)
+        .catch(() => [])
+    ])
+    return { branch, upstream, remoteName, fetchUrls, pushUrls }
+  }
+
+  private async fallbackRemoteUrl(): Promise<string | null> {
+    const urls = await this.git
+      .raw(['config', '--get-all', 'remote.origin.url'])
+      .then(configLines)
+      .catch(() => [])
+    return urls[0] ?? null
+  }
+
   private async currentOperation(): Promise<StatusDto['operation']> {
     if (await this.hasGitFile('CHERRY_PICK_HEAD')) return 'cherry-pick'
     if (await this.hasGitFile('REVERT_HEAD')) return 'revert'
@@ -662,6 +839,42 @@ function normalizeWorktreePaths(paths: string[]): string[] {
 
 function literalPathspec(path: string): string {
   return `:(literal)${path}`
+}
+
+function configLines(raw: string): string[] {
+  return raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+}
+
+function formatRecoveryTranscript(steps: GitHubRecoveryStepDto[]): string {
+  return steps
+    .map((step) => {
+      const status = step.status === 'success' ? 'OK' : 'FAILED'
+      return [`[${status}] ${step.command}`, step.output].filter(Boolean).join('\n')
+    })
+    .join('\n\n')
+}
+
+function githubAccountUnavailableMessage(
+  reason: GitHubAccountStateDto['unavailableReason']
+): string {
+  switch (reason) {
+    case 'NO_UPSTREAM':
+      return 'the current branch has no upstream remote'
+    case 'NOT_GITHUB':
+      return 'the current upstream is not hosted on github.com'
+    case 'SSH_UNSUPPORTED':
+      return 'GitHub account switching supports HTTPS remotes only'
+    case 'GCM_UNAVAILABLE':
+      return 'Git Credential Manager is unavailable'
+    case 'NO_ACCOUNTS':
+      return 'Git Credential Manager has no stored GitHub accounts'
+    case 'COMPLEX_REMOTE':
+      return 'the current upstream remote has unsupported URL settings'
+    case 'CREDENTIAL_IN_URL':
+      return 'the current upstream URL contains embedded credentials'
+    default:
+      return 'GitHub account switching is unavailable'
+  }
 }
 
 function isMissingFileError(err: unknown): boolean {

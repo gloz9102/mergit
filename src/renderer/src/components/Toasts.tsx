@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { GitErrorDto } from '../../../shared/types'
 import { toastError } from '../lib/run'
+import { useRepoStore } from '../stores/repoStore'
 import { useUiStore } from '../stores/uiStore'
 
 const GITHUB_BUG_REPORT_URL = 'https://github.com/gloz9102/mergit/issues/new?template=bug_report.yml'
@@ -14,6 +15,36 @@ export function Toasts() {
   const pushToast = useUiStore((s) => s.pushToast)
   const [expanded, setExpanded] = useState<number | null>(null)
   const [copying, setCopying] = useState<number | null>(null)
+  const [recovering, setRecovering] = useState<number | null>(null)
+  const [recoveryAvailability, setRecoveryAvailability] = useState<
+    Record<number, 'loading' | 'available' | 'unavailable'>
+  >({})
+  const checkedRecoveryToasts = useRef(new Set<number>())
+
+  useEffect(() => {
+    const candidates = toasts.filter(
+      (toast) =>
+        toast.kind === 'error' &&
+        (toast.errorCode === 'AUTH' || toast.errorCode === 'REMOTE') &&
+        !checkedRecoveryToasts.current.has(toast.id)
+    )
+    if (candidates.length === 0) return
+    for (const toast of candidates) {
+      checkedRecoveryToasts.current.add(toast.id)
+      setRecoveryAvailability((current) => ({ ...current, [toast.id]: 'loading' }))
+      void window.api
+        .getGitHubAccountState()
+        .then((state) => {
+          setRecoveryAvailability((current) => ({
+            ...current,
+            [toast.id]: state.recoveryAvailable ? 'available' : 'unavailable'
+          }))
+        })
+        .catch(() => {
+          setRecoveryAvailability((current) => ({ ...current, [toast.id]: 'unavailable' }))
+        })
+    }
+  }, [toasts])
 
   async function copyLog(id: number, message: string, detail?: string): Promise<void> {
     setCopying(id)
@@ -29,6 +60,31 @@ export function Toasts() {
       pushToast(t('error.CLIPBOARD'), error.detail ?? error.message, 'error')
     } finally {
       setCopying((current) => (current === id ? null : current))
+    }
+  }
+
+  async function recoverGitHub(id: number): Promise<void> {
+    const ui = useUiStore.getState()
+    const mutation = ui.beginGitMutation('githubRecovery')
+    if (!mutation) return
+    setRecovering(id)
+    try {
+      const result = await window.api.recoverGitHub()
+      await useRepoStore.getState().refresh()
+      dismiss(id)
+      useUiStore.getState().pushToast(
+        t('toast.githubRecoverySucceeded'),
+        result.transcript,
+        'success',
+        { persistent: true }
+      )
+    } catch (err) {
+      await useRepoStore.getState().refresh().catch(toastError)
+      dismiss(id)
+      toastError(err)
+    } finally {
+      useUiStore.getState().endGitMutation(mutation)
+      setRecovering((current) => (current === id ? null : current))
     }
   }
 
@@ -60,7 +116,20 @@ export function Toasts() {
             </button>
           </div>
           {(toast.detail || toast.kind === 'error') && (
-            <div className="mt-1 flex flex-wrap items-center gap-3">
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              {recoveryAvailability[toast.id] === 'available' && (
+                <button
+                  type="button"
+                  disabled={recovering !== null}
+                  aria-busy={recovering === toast.id}
+                  onClick={() => void recoverGitHub(toast.id)}
+                  className="rounded bg-emerald-700 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-600 disabled:cursor-wait disabled:opacity-50"
+                >
+                  {recovering === toast.id
+                    ? t('github.recovery.running')
+                    : t('github.recovery.action')}
+                </button>
+              )}
               {toast.detail && (
                 <button
                   type="button"

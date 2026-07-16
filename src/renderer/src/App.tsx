@@ -161,7 +161,7 @@ export default function App() {
   }, [])
 
   return (
-    <main className="flex h-screen flex-col bg-zinc-900 text-zinc-200">
+    <main className="flex h-screen overflow-hidden flex-col bg-zinc-900 text-zinc-200">
       <Toolbar />
       <MergeBanner />
       {repo ? (

@@ -1,7 +1,9 @@
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { toGitError } from '../errors'
 import { GitService, MAX_UNTRACKED_DIFF_BYTES } from '../gitService'
 import { gitIn, makeConflictRepo, makeRepo, makeRepoWithCommits } from './fixtures'
 
@@ -720,6 +722,239 @@ describe('GitService', () => {
     await svc.fetch()
     const branches = await svc.branches()
     expect(branches.some((b) => b.isRemote && b.name === 'origin/main')).toBe(true)
+  })
+
+  it('getGitHubAccountState: 현재 upstream과 GCM 계정을 반환한다', async () => {
+    const dir = makeRepo()
+    const git = gitIn(dir)
+    git('remote', 'add', 'origin', 'https://github.com/acme/project.git')
+    git('config', 'branch.main.remote', 'origin')
+    git('config', 'branch.main.merge', 'refs/heads/main')
+    git('config', 'credential.https://github.com.username', 'alice')
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+    const svc = new GitService(dir, { listAccounts: async () => ['alice', 'bob'] })
+
+    expect(await svc.getGitHubAccountState()).toMatchObject({
+      isGitHubRepository: true,
+      remoteName: 'origin',
+      transport: 'https',
+      accounts: ['alice', 'bob'],
+      selectedAccount: null,
+      recoveryAvailable: true,
+      accountSwitchAvailable: true
+    })
+  })
+
+  it('switchGitHubAccount: upstream 원격 계정을 지정하고 시스템 기본으로 복원한다', async () => {
+    const dir = makeRepo()
+    const git = gitIn(dir)
+    git('remote', 'add', 'origin', 'https://github.com/acme/project.git')
+    git('config', 'branch.main.remote', 'origin')
+    git('config', 'branch.main.merge', 'refs/heads/main')
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+    const svc = new GitService(dir, { listAccounts: async () => ['alice', 'bob'] })
+
+    const selected = await svc.switchGitHubAccount('bob')
+    expect(git('remote', 'get-url', 'origin').trim()).toBe(
+      'https://bob@github.com/acme/project.git'
+    )
+    expect(selected.selectedAccount).toBe('bob')
+
+    const restored = await svc.switchGitHubAccount(null)
+    expect(git('remote', 'get-url', 'origin').trim()).toBe(
+      'https://github.com/acme/project.git'
+    )
+    expect(restored.selectedAccount).toBe(null)
+  })
+
+  it('switchGitHubAccount: GCM에 없는 계정은 원격을 변경하지 않는다', async () => {
+    const dir = makeRepo()
+    const git = gitIn(dir)
+    git('remote', 'add', 'origin', 'https://github.com/acme/project.git')
+    git('config', 'branch.main.remote', 'origin')
+    git('config', 'branch.main.merge', 'refs/heads/main')
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+    const svc = new GitService(dir, { listAccounts: async () => ['alice'] })
+
+    await expect(svc.switchGitHubAccount('mallory')).rejects.toMatchObject({ code: 'AUTH' })
+    expect(git('remote', 'get-url', 'origin').trim()).toBe(
+      'https://github.com/acme/project.git'
+    )
+  })
+
+  it('switchGitHubAccount: push URL 변경 실패 시 fetch URL을 원복한다', async () => {
+    const dir = makeRepo()
+    const git = gitIn(dir)
+    git('remote', 'add', 'origin', 'https://github.com/acme/project.git')
+    git('remote', 'set-url', '--push', 'origin', 'https://github.com/acme/push.git')
+    git('config', 'branch.main.remote', 'origin')
+    git('config', 'branch.main.merge', 'refs/heads/main')
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+    const svc = new GitService(dir, { listAccounts: async () => ['alice', 'bob'] })
+    const internal = svc as unknown as {
+      git: { raw(args: string[]): Promise<string> }
+    }
+    const originalRaw = internal.git.raw.bind(internal.git)
+    vi.spyOn(internal.git, 'raw').mockImplementation((args: string[]) => {
+      if (
+        args[0] === 'remote' &&
+        args[1] === 'set-url' &&
+        args[2] === '--push' &&
+        args.at(-1)?.includes('bob@')
+      ) {
+        return Promise.reject(new Error('simulated push URL failure'))
+      }
+      return originalRaw(args)
+    })
+
+    await expect(svc.switchGitHubAccount('bob')).rejects.toThrow(/simulated/i)
+
+    expect(git('remote', 'get-url', 'origin').trim()).toBe(
+      'https://github.com/acme/project.git'
+    )
+    expect(git('remote', 'get-url', '--push', 'origin').trim()).toBe(
+      'https://github.com/acme/push.git'
+    )
+  })
+
+  it('recoverGitHub: 현재 경로와 Git 진단 후 pull을 실행한다', async () => {
+    const dir = makeRepo()
+    const remoteDir = mkdtempSync(join(tmpdir(), 'gkc-recovery-remote-'))
+    gitIn(remoteDir)('init', '--bare', '-b', 'main')
+    const git = gitIn(dir)
+    git('remote', 'add', 'origin', remoteDir)
+    git('push', '-u', 'origin', 'main')
+    const svc = new GitService(dir, { listAccounts: async () => [] })
+
+    const result = await svc.recoverGitHub()
+
+    expect(result.steps.map((step) => step.command)).toEqual([
+      expect.stringMatching(/^cd "/),
+      'Get-Location',
+      'git rev-parse --show-toplevel',
+      'git branch --show-current',
+      "git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}'",
+      'git pull'
+    ])
+    expect(result.steps.every((step) => step.status === 'success')).toBe(true)
+    expect(result.transcript).toContain('[OK] git pull')
+    expect(result.steps[3].output).toBe('main')
+    expect(result.steps[4].output).toBe('origin/main')
+  })
+
+  it('recoverGitHub: upstream이 없으면 완료한 단계와 실패 명령을 detail에 남긴다', async () => {
+    const dir = makeRepo()
+    const svc = new GitService(dir, { listAccounts: async () => [] })
+
+    await expect(svc.recoverGitHub()).rejects.toMatchObject({
+      code: 'REMOTE',
+      message: expect.stringContaining('[OK] Get-Location')
+    })
+    await expect(svc.recoverGitHub()).rejects.toThrow(
+      /git rev-parse --abbrev-ref --symbolic-full-name/
+    )
+  })
+
+  it('recoverGitHub: detached HEAD에서는 현재 브랜치 출력 후 upstream 단계에서 중단한다', async () => {
+    const dir = makeRepo()
+    const git = gitIn(dir)
+    git('checkout', '--detach')
+    const svc = new GitService(dir, { listAccounts: async () => [] })
+
+    await expect(svc.recoverGitHub()).rejects.toMatchObject({
+      message: expect.stringContaining('[OK] git branch --show-current')
+    })
+    await expect(svc.recoverGitHub()).rejects.toThrow(/\[FAILED\].*@\{upstream\}/s)
+  })
+
+  it('recoverGitHub: pull 충돌은 CONFLICT로 반환하고 충돌 상태를 남긴다', async () => {
+    const dir = makeRepo()
+    const remoteDir = mkdtempSync(join(tmpdir(), 'gkc-recovery-conflict-remote-'))
+    gitIn(remoteDir)('init', '--bare', '-b', 'main')
+    const git = gitIn(dir)
+    git('remote', 'add', 'origin', remoteDir)
+    git('push', '-u', 'origin', 'main')
+    git('config', 'pull.rebase', 'false')
+
+    const cloneParent = mkdtempSync(join(tmpdir(), 'gkc-recovery-clone-'))
+    const cloneDir = join(cloneParent, 'clone')
+    execFileSync('git', ['clone', remoteDir, cloneDir], { encoding: 'utf-8' })
+    const cloneGit = gitIn(cloneDir)
+    cloneGit('config', 'user.email', 'other@test.com')
+    cloneGit('config', 'user.name', 'Other')
+
+    writeFileSync(join(dir, 'a.txt'), 'local change\nline2\n')
+    git('commit', '-am', 'local change')
+    writeFileSync(join(cloneDir, 'a.txt'), 'remote change\nline2\n')
+    cloneGit('commit', '-am', 'remote change')
+    cloneGit('push', 'origin', 'main')
+
+    const svc = new GitService(dir, { listAccounts: async () => [] })
+    await expect(svc.recoverGitHub()).rejects.toMatchObject({ code: 'CONFLICT' })
+
+    expect((await svc.status()).operation).toBe('merge')
+    expect((await svc.status()).conflicted).toContain('a.txt')
+  })
+
+  it.each([
+    [
+      '인증 실패',
+      'fatal: Authentication failed for https://github.com/acme/project.git',
+      'AUTH'
+    ],
+    [
+      '네트워크 실패',
+      'fatal: unable to access https://github.com/acme/project.git: Could not resolve host',
+      'REMOTE'
+    ]
+  ] as const)(
+    'recoverGitHub: %s에서 pull까지의 부분 transcript와 오류 코드를 유지한다',
+    async (_label, message, code) => {
+      const dir = makeRepo()
+      const git = gitIn(dir)
+      git('remote', 'add', 'origin', 'https://github.com/acme/project.git')
+      git('config', 'branch.main.remote', 'origin')
+      git('config', 'branch.main.merge', 'refs/heads/main')
+      git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+      const svc = new GitService(dir, { listAccounts: async () => ['alice'] })
+      const internal = svc as unknown as {
+        git: { raw(args: string[]): Promise<string> }
+      }
+      const originalRaw = internal.git.raw.bind(internal.git)
+      vi.spyOn(internal.git, 'raw').mockImplementation((args: string[]) => {
+        if (args[0] === 'pull') return Promise.reject(new Error(message))
+        return originalRaw(args)
+      })
+
+      const error = await svc.recoverGitHub().then(
+        () => null,
+        (err: unknown) => toGitError(err)
+      )
+      expect(error).toMatchObject({
+        code,
+        message: expect.stringContaining('[OK] cd "'),
+        detail: expect.stringContaining('[FAILED] git pull')
+      })
+      expect(error?.detail).toContain('[OK] Get-Location')
+    }
+  )
+
+  it('getGitHubAccountState: SSH upstream은 복구 가능하지만 계정 전환은 차단한다', async () => {
+    const dir = makeRepo()
+    const git = gitIn(dir)
+    git('remote', 'add', 'origin', 'git@github.com:acme/project.git')
+    git('config', 'branch.main.remote', 'origin')
+    git('config', 'branch.main.merge', 'refs/heads/main')
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+    const svc = new GitService(dir, { listAccounts: async () => ['alice'] })
+
+    expect(await svc.getGitHubAccountState()).toMatchObject({
+      isGitHubRepository: true,
+      transport: 'ssh',
+      recoveryAvailable: true,
+      accountSwitchAvailable: false,
+      unavailableReason: 'SSH_UNSUPPORTED'
+    })
   })
 
   it('commitFiles / diffCommitFile / diffWorkingFile', async () => {

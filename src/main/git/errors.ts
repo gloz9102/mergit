@@ -56,7 +56,7 @@ function gitCommandErrorDetail(err: GitCommandExecutionError): string {
   return detail || `Git ${err.kind} command failed: ${err.label}`
 }
 
-function sanitizeGitDetail(detail: string): string {
+export function sanitizeGitDetail(detail: string): string {
   return detail.replace(/(https?:\/\/)([^/\s:@]+(?::[^/\s@]*)?@)/gi, '$1***@')
 }
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { UpdateEventDto } from '../../../shared/api'
+import type { GitErrorCode } from '../../../shared/types'
 
 export type Selection = { type: 'commit'; hash: string } | { type: 'wip' } | { type: 'stash'; oid: string } | null
 
@@ -43,11 +44,17 @@ export interface LeftPanelListLimits {
 
 export type ToastKind = 'info' | 'success' | 'error'
 
-interface Toast {
+export interface Toast {
   id: number
   message: string
   detail?: string
   kind: ToastKind
+  errorCode?: GitErrorCode
+}
+
+export interface ToastOptions {
+  errorCode?: GitErrorCode
+  persistent?: boolean
 }
 
 interface ConfirmState {
@@ -91,7 +98,7 @@ interface UiState {
   closeCommitSearch(): void
   openConflict(path: string | null): void
   setShowSettings(v: boolean): void
-  pushToast(message: string, detail?: string, kind?: ToastKind): void
+  pushToast(message: string, detail?: string, kind?: ToastKind, options?: ToastOptions): void
   dismissToast(id: number): void
   ask(message: string, onConfirm: () => void, tone?: ConfirmState['tone']): void
   closeConfirm(): void
@@ -242,10 +249,14 @@ export const useUiStore = create<UiState>((set) => ({
   openConflict: (conflictFile) => set({ conflictFile }),
   setShowSettings: (showSettings) => set({ showSettings }),
 
-  pushToast: (message, detail, kind = 'info') => {
+  pushToast: (message, detail, kind = 'info', options) => {
     const id = ++toastId
-    set((s) => ({ toasts: [...s.toasts, { id, message, detail, kind }] }))
-    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 6000)
+    set((s) => ({
+      toasts: [...s.toasts, { id, message, detail, kind, errorCode: options?.errorCode }]
+    }))
+    if (!options?.persistent) {
+      setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 6000)
+    }
   },
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 

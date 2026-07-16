@@ -1,0 +1,102 @@
+{
+  "visual_target": {
+    "created_before_coding": true,
+    "expanded_design_brief_created": true,
+    "brief_summary": "Mergit의 기존 zinc 배경, emerald 강조, red 오류 체계를 유지하면서 GitHub 복구를 오류 토스트의 단일 주 동작으로, 계정 전환을 설정의 밀도 높은 저장소 상태 섹션으로 추가한다.",
+    "summary": "Linear식 데스크톱 도구 밀도와 기존 Mergit 컴포넌트를 기준으로 1280x800, 800x600, 390x844에서 계층, 스크롤, 긴 값, 오류 동작을 검증했다.",
+    "benchmarks": [
+      "기존 Mergit 설정 모달과 토스트",
+      "Linear식 개발 도구 정보 밀도"
+    ],
+    "primary_cta": "오류 토스트의 GitHub 복구 시도와 설정 GitHub 계정 섹션의 계정 전환",
+    "token_strategy": "기존 Tailwind zinc, emerald, red 색상과 4px 기반 간격, 기존 radius 및 border 수준을 재사용한다."
+  },
+  "visual_review": {
+    "desktop_checked": true,
+    "mobile_checked": true,
+    "brand_reference_compared": true,
+    "ai_slop_visual_compared": true,
+    "ui_craft_compared": true,
+    "comparison_notes": "1차 검수에서 390px 바깥 가로 스크롤과 비동기 계정 상태 캡처 시점을 발견했다. 앱 루트 넘침을 차단하고 상태 대기 조건을 보완한 뒤 2차 검수에서 모달 내부 세로 스크롤, 긴 URL 줄바꿈, 계정명 말줄임, 복구 버튼 우선순위, 0건의 콘솔 오류를 확인했다.",
+    "screenshots": {
+      "desktop": "docs/quality/v0.7.3-settings-desktop.png",
+      "mobile": "docs/quality/v0.7.3-settings-narrow.png"
+    },
+    "console_errors": 0,
+    "layout_issues_open": 0,
+    "iterations": 2
+  },
+  "measurements": {
+    "lighthouse": {
+      "performance": 98,
+      "accessibility": 100,
+      "best_practices": 100,
+      "seo": 100
+    },
+    "commands": [
+      "npm run build",
+      "Electron hidden BrowserWindow capturePage at 1280x800, 800x600, and 390x844",
+      "Lighthouse desktop against the production renderer build using Microsoft Edge",
+      "npm test",
+      "npm run test:coverage",
+      "npm run typecheck",
+      "npm run lint"
+    ]
+  },
+  "checks": {
+    "no_placeholder_copy": true,
+    "no_generic_ai_hero": true,
+    "no_decorative_gradient_orbs": true,
+    "no_unverified_fake_metrics": true,
+    "no_nested_card_soup": true,
+    "screen_information_density_restrained": true,
+    "no_inconsistent_spacing": true,
+    "no_text_overflow_or_overlap": true,
+    "default_background_black_or_white": true,
+    "background_variation_confirmed_or_avoided": true,
+    "no_one_note_palette": true,
+    "accent_colors_minimized": true,
+    "no_default_saas_gradient": true,
+    "no_stock_ai_imagery": true,
+    "no_vague_aspirational_copy": true,
+    "copy_information_density_restrained": true,
+    "copy_length_restrained": true,
+    "no_polished_but_empty_sections": true,
+    "no_unnecessary_badges_or_titles": true,
+    "no_hallucinated_or_unverifiable_claims": true,
+    "tokens_or_local_theme_used": true,
+    "semantic_color_tokens_defined": true,
+    "color_roles_tokenized_before_use": true,
+    "expanded_brief_drives_implementation": true,
+    "explicit_user_constraints_preserved": true,
+    "domain_specific_screens_or_sections_defined": true,
+    "shared_components_defined": true,
+    "layout_board_or_page_structure_defined": true,
+    "no_raw_visual_values_when_tokens_exist": true,
+    "spacing_4px_scale_used": true,
+    "type_scale_limited": true,
+    "radius_and_shadow_levels_limited": true,
+    "border_usage_minimized": true,
+    "border_usage_not_overused": true,
+    "border_radius_minimized": true,
+    "border_radius_not_overused": true,
+    "box_shadow_not_overused": true,
+    "borders_and_shadows_restrained": true,
+    "list_item_borders_and_shadows_minimized": true,
+    "semantic_color_roles_used": true,
+    "von_restorff_emphasis_used_deliberately": true,
+    "single_primary_action_per_area": true,
+    "hover_focus_active_disabled_states": true,
+    "loading_empty_error_extreme_states_considered": true,
+    "motion_constraints_respected": true,
+    "touch_targets_and_semantics_checked": true,
+    "responsive_layout_verified": true,
+    "word_break_and_wrapping_verified": true,
+    "interactive_states_present": true,
+    "assets_render_correctly": true,
+    "accessibility_basics_pass": true,
+    "brand_reference_principles_applied": true,
+    "visual_target_matches_result": true,
+    "slop_checklist_compared_visually": true
+  }
+}

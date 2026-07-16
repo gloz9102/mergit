@@ -18,7 +18,7 @@
 
 - **Conflict-first** — merge, cherry-pick, revert 중 생긴 충돌을 한 흐름에서 해결합니다.
 - **Safe daily Git** — stage, commit, amend, undo last commit, stash, push/pull/fetch 같은 매일 쓰는 작업을 작게 제공합니다.
-- **Git-native** — 별도 계정이나 호스팅 서비스 연동 없이 시스템 git, credential helper, SSH 설정을 그대로 사용합니다.
+- **Git-native** — 시스템 git, credential helper, SSH 설정을 그대로 사용하며 GCM에 저장된 GitHub 계정을 저장소별로 선택할 수 있습니다.
 - **한국어/영어 지원** — 시스템 로케일 자동 감지와 설정 전환을 지원합니다.
 
 ![메인 화면 — 커밋 그래프](docs/screenshots/main.png)
@@ -38,6 +38,7 @@
 | commit / amend / undo last commit | 지원 |
 | branch 생성·전환·rename·delete·merge | 지원 |
 | push / pull / fetch | 지원 |
+| GitHub 원격 복구 시도 / GCM 계정 전환 | 지원 |
 | stash save / apply / pop / drop / 파일 단위 stash | 지원 |
 | merge / cherry-pick / revert conflict 해결 | 지원 |
 | 외부 변경 자동 감지 | 지원 |
@@ -55,10 +56,11 @@
 - **Staging** — 파일 단위 stage / unstage / discard, diff는 중앙 패널에서 크게 확인.
 - **커밋 작업** — commit, amend, 마지막 커밋 취소(soft reset), cherry-pick, revert를 제공합니다.
 - **브랜치 / 원격 / stash** — 브랜치 생성·전환·rename·delete(미머지 시 강제 삭제 확인), push/pull/fetch(시스템 git의 credential helper / SSH 설정 사용, ahead/behind·진행 스피너 표시), stash 저장/적용/pop/삭제·파일 단위 stash.
+- **GitHub 복구와 계정 전환** — 인증·원격 오류에서 현재 경로, 저장소 루트, 브랜치, upstream을 진단한 뒤 pull을 다시 시도합니다. 설정에서는 Git Credential Manager에 저장된 계정을 현재 저장소의 GitHub HTTPS upstream에 적용할 수 있습니다.
 - **3-패널 conflict 해결** — 충돌 시 Ours/Theirs를 나란히 놓고 블록별 체크박스로 선택, 하단 Output 에디터에서 결과를 직접 수정. 해결 진행 카운터와 충돌 블록 간 이동을 지원합니다.
 - **외부 변경 자동 감지** — 터미널에서 git을 사용해도 화면이 자동 갱신됩니다.
-- **오류 진단** — 오류 토스트의 로그를 복사하고 Mergit GitHub 버그 이슈 작성 화면으로 바로 이동할 수 있습니다.
-- **설정과 업데이트** — 언어 즉시 전환, 설정창에서 GitHub 저장소 링크와 현재 버전 확인, 수동/자동 업데이트 확인.
+- **오류 진단** — 오류 토스트의 로그를 복사하고 Mergit GitHub 버그 이슈 작성 화면으로 바로 이동할 수 있습니다. GitHub 인증·원격 오류에는 복구 시도 동작이 함께 표시됩니다.
+- **설정과 업데이트** — 언어 즉시 전환, GitHub 계정 전환, GitHub 저장소 링크와 현재 버전 확인, 수동/자동 업데이트 확인.
 - **종료 확인** — 마지막 창을 닫을 때 확인 다이얼로그로 실수 종료를 방지합니다.
 
 **Staging — 스테이지 / 언스테이지 / discard:**
@@ -80,6 +82,7 @@
 
 **실행 전 확인:**
 - PC에 **git이 설치되어 있어야 합니다** (`git --version`으로 확인).
+- GitHub HTTPS 계정 전환은 **Git Credential Manager**에 저장된 기존 계정을 사용합니다. 계정 전환 기능을 사용하지 않으면 필수가 아닙니다.
 - 코드 서명이 없는 빌드라 SmartScreen 경고가 뜰 수 있습니다 — **"추가 정보" → "실행"** 으로 진행하세요.
 
 **업데이트:**
@@ -113,7 +116,7 @@ npm run dev        # Electron 개발 모드 (HMR)
 
 Mergit은 모든 Git 기능을 담는 도구가 아닙니다. 자주 쓰는 핵심 흐름을 작고 안전하게 제공하는 것을 목표로 합니다.
 
-- GitHub/GitLab PR·이슈·계정 연동
+- GitHub/GitLab PR·이슈 연동
 - GitFlow 전용 UI
 - submodule 관리 UI
 - tag CRUD
@@ -169,7 +172,8 @@ Vitest가 `.test.ts`와 `.test.tsx`를 모두 실행합니다.
 - 3-way conflict editor에서 base 패널과 자동 비충돌 적용은 아직 지원하지 않습니다.
 - rebase(인터랙티브 포함), tag 관리, GPG 서명은 지원하지 않습니다.
 - 한 창에서는 저장소 하나만 엽니다. 여러 저장소는 새 창으로 열 수 있습니다.
-- GitHub/GitLab 연동(PR, 이슈)은 없습니다.
+- GitHub/GitLab PR·이슈 연동은 없습니다.
+- GitHub 계정 전환은 HTTPS 원격과 Git Credential Manager에 저장된 기존 계정만 지원합니다. SSH 원격은 시스템 SSH 설정을 그대로 사용합니다.
 - 그래프 레인 배치는 첫-부모-우선 휴리스틱이라 복잡한 머지 히스토리에서 레인이 교차할 수 있습니다.
 
 ## 라이선스

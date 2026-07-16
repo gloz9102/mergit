@@ -164,6 +164,27 @@ describe('app IPC', () => {
     })
   })
 
+  it('switchGitHubAccount: 문자열 또는 null 이외 입력은 실행 전에 거부한다', async () => {
+    const dir = makeRepo()
+    const win = {
+      webContents: { id: 72 },
+      once: vi.fn(),
+      isDestroyed: vi.fn(() => false)
+    } as unknown as BrowserWindow
+    electronMock.browserWindow.fromWebContents.mockReturnValue(win)
+    expect(((await handler('git:openRepo')({ sender: { id: 72 } }, dir)) as Envelope).ok).toBe(true)
+
+    const res = (await handler('git:switchGitHubAccount')(
+      { sender: { id: 72 } },
+      { account: 'alice' }
+    )) as Envelope
+
+    expect(res.ok).toBe(false)
+    expect((res as { ok: false; error: { detail: string } }).error.detail).toBe(
+      'invalid IPC arguments for switchGitHubAccount'
+    )
+  })
+
   it('custom IPC도 저장소 경로 타입을 검증한다', async () => {
     const res = (await handler('git:openRepo')({ sender: { id: 71 } }, 123)) as Envelope
 

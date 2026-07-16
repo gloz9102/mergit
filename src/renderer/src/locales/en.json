@@ -145,6 +145,34 @@
     "githubRepo": "GitHub repository",
     "close": "Close"
   },
+  "github": {
+    "account": {
+      "title": "GitHub account",
+      "noRepo": "Open a repository to switch accounts.",
+      "loading": "Checking GitHub account settings...",
+      "remote": "Remote",
+      "transport": "Transport",
+      "current": "Current account",
+      "select": "Account to use",
+      "systemDefault": "System default",
+      "switch": "Switch account",
+      "switching": "Switching...",
+      "switched": "GitHub account switched",
+      "unavailable": {
+        "NO_UPSTREAM": "The current branch has no upstream remote.",
+        "NOT_GITHUB": "The current upstream is not hosted on GitHub.",
+        "SSH_UNSUPPORTED": "SSH remotes use system SSH settings. Account switching supports HTTPS only.",
+        "GCM_UNAVAILABLE": "Git Credential Manager is unavailable.",
+        "NO_ACCOUNTS": "Git Credential Manager has no stored GitHub accounts.",
+        "COMPLEX_REMOTE": "Multiple remote URLs are configured, so the account cannot be switched automatically.",
+        "CREDENTIAL_IN_URL": "The remote URL contains credentials and cannot be switched."
+      }
+    },
+    "recovery": {
+      "action": "Try GitHub recovery",
+      "running": "Trying recovery..."
+    }
+  },
   "update": {
     "title": "Updates",
     "version": "Version",
@@ -213,6 +241,7 @@
     "stashedCheckoutFailed": "Saved changes to stash, but checkout failed",
     "stashPopped": "Stash popped",
     "resolvedSaved": "Marked as resolved",
-    "operationAborted": "Operation aborted"
+    "operationAborted": "Operation aborted",
+    "githubRecoverySucceeded": "GitHub recovery completed"
   }
 }
